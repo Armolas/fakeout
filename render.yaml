@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fakeout-backend
+    runtime: docker
+    rootDir: fakeout-backend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: PORT
+        value: 3001
+      - key: MAX_ROUNDS
+        value: 3
