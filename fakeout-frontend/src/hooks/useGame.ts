@@ -88,6 +88,8 @@ export function useGame(walletAddress: string, displayName: string) {
   const socketRef = useRef<Socket | null>(null)
   const walletRef = useRef(walletAddress)
   walletRef.current = walletAddress
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   function patch(updates: Partial<GameState>) {
     setState(prev => ({ ...prev, ...updates }))
@@ -100,7 +102,14 @@ export function useGame(walletAddress: string, displayName: string) {
     const socket = io(BACKEND_URL, { transports: ['websocket', 'polling'] })
     socketRef.current = socket
 
-    socket.on('connect', () => patch({ connected: true, error: null }))
+    socket.on('connect', () => {
+      patch({ connected: true, error: null })
+      // Auto-rejoin if we were mid-game when the connection dropped
+      const { roomCode, phase } = stateRef.current
+      if (roomCode && phase !== 'idle' && phase !== 'results') {
+        socket.emit('game:rejoin', { walletAddress: walletRef.current })
+      }
+    })
     socket.on('disconnect', () => patch({ connected: false }))
     socket.on('connect_error', () =>
       patch({ error: 'Cannot reach server. Check your connection.' })
@@ -251,6 +260,38 @@ export function useGame(walletAddress: string, displayName: string) {
       })
     })
 
+    socket.on('player:disconnected', (data: { walletAddress: string }) => {
+      setState(prev => ({
+        ...prev,
+        lobbyPlayers: prev.lobbyPlayers.map(p =>
+          p.walletAddress === data.walletAddress ? { ...p, disconnected: true } : p
+        ),
+        players: prev.players.map(p =>
+          p.walletAddress === data.walletAddress ? { ...p, disconnected: true } : p
+        ),
+      }))
+    })
+
+    socket.on('player:removed', (data: { walletAddress: string }) => {
+      setState(prev => ({
+        ...prev,
+        lobbyPlayers: prev.lobbyPlayers.filter(p => p.walletAddress !== data.walletAddress),
+        players: prev.players.filter(p => p.walletAddress !== data.walletAddress),
+      }))
+    })
+
+    socket.on('player:reconnected', (data: { walletAddress: string }) => {
+      setState(prev => ({
+        ...prev,
+        lobbyPlayers: prev.lobbyPlayers.map(p =>
+          p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p
+        ),
+        players: prev.players.map(p =>
+          p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p
+        ),
+      }))
+    })
+
     socket.on('player:eliminated', (data: PublicPlayer) => {
       patch({
         phase: 'eliminated_notice',
@@ -331,7 +372,15 @@ export function useGame(walletAddress: string, displayName: string) {
 
   const clearError = useCallback(() => patch({ error: null }), [])
 
-  const resetGame = useCallback(() => setState(INITIAL_STATE), [])
+  const resetGame = useCallback(() => {
+    if (state.roomCode && state.phase === 'lobby') {
+      socketRef.current?.emit('game:leave', {
+        walletAddress: walletRef.current,
+        roomCode: state.roomCode,
+      })
+    }
+    setState(INITIAL_STATE)
+  }, [state.roomCode, state.phase])
 
   return {
     ...state,

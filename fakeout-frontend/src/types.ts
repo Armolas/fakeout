@@ -13,11 +13,13 @@ export interface LobbyPlayer {
   walletAddress: string
   displayName: string
   isHost: boolean
+  disconnected?: boolean
 }
 
 export interface PublicPlayer {
   walletAddress: string
   displayName: string
+  disconnected?: boolean
 }
 
 // ─── Socket payloads (server → client) ───────────────────────────────────────

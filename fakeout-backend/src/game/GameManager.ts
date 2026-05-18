@@ -507,9 +507,47 @@ export const GameManager = {
     return game
   },
 
+  // ── Leave a lobby ────────────────────────────────────────────────────────────
+  leaveGame(walletAddress: string, roomCode: string): { game: Game | null; wasHost: boolean } {
+    const game = activeGames.get(roomCode.toUpperCase())
+    if (!game || game.status !== 'lobby') {
+      playerGameMap.delete(walletAddress.toLowerCase())
+      return { game: null, wasHost: false }
+    }
+
+    const player = Object.values(game.players).find(
+      p => p.walletAddress === walletAddress.toLowerCase()
+    )
+    if (!player) return { game: null, wasHost: false }
+
+    const wasHost = player.playerId === game.createdBy
+    delete game.players[player.playerId]
+    playerGameMap.delete(walletAddress.toLowerCase())
+
+    // If lobby is now empty, remove it entirely
+    if (Object.keys(game.players).length === 0) {
+      activeGames.delete(roomCode.toUpperCase())
+      return { game: null, wasHost }
+    }
+
+    // If the host left, transfer host to the next player
+    if (wasHost) {
+      const nextPlayer = Object.values(game.players)[0]
+      game.createdBy = nextPlayer.playerId
+    }
+
+    return { game, wasHost }
+  },
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   getGame: (roomCode: string): Game | undefined =>
     activeGames.get(roomCode.toUpperCase()),
+
+  getGameByWallet: (walletAddress: string): Game | undefined => {
+    const roomCode = playerGameMap.get(walletAddress.toLowerCase())
+    if (!roomCode) return undefined
+    return activeGames.get(roomCode)
+  },
 
   getPublicLobbies: (): Game[] =>
     [...activeGames.values()].filter(

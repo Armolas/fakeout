@@ -17,6 +17,13 @@ const VOTE_TIMEOUT = parseInt(process.env.VOTE_TIMEOUT_SECONDS || '60') * 1000
 // Track round timers so we can clear them
 const roundTimers = new Map<string, NodeJS.Timeout>()
 
+// socket.id → walletAddress (for disconnect lookup)
+const socketWalletMap = new Map<string, string>()
+// walletAddress → reconnect timer
+const reconnectTimers = new Map<string, NodeJS.Timeout>()
+
+const RECONNECT_TIMEOUT_MS = 30_000
+
 function clearTimer(key: string) {
   const t = roundTimers.get(key)
   if (t) {
@@ -57,6 +64,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       })
 
       GameManager.setPlayerSocket(payload.walletAddress, socket.id)
+      socketWalletMap.set(socket.id, payload.walletAddress.toLowerCase())
       socket.join(game.roomCode)
 
       socket.emit('game:created', {
@@ -82,6 +90,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       })
 
       GameManager.setPlayerSocket(payload.walletAddress, socket.id)
+      socketWalletMap.set(socket.id, payload.walletAddress.toLowerCase())
       socket.join(game.roomCode)
 
       // Tell everyone in the lobby
@@ -104,12 +113,22 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
   // ── game:rejoin ─────────────────────────────────────────────────────────────
   socket.on('game:rejoin', (payload: RejoinGamePayload) => {
     try {
-      const game = GameManager.reconnectPlayer(payload.walletAddress, socket.id)
+      const wallet = payload.walletAddress.toLowerCase()
+
+      // Cancel any pending disconnect timeout
+      const existing = reconnectTimers.get(wallet)
+      if (existing) {
+        clearTimeout(existing)
+        reconnectTimers.delete(wallet)
+      }
+
+      const game = GameManager.reconnectPlayer(wallet, socket.id)
       if (!game) {
         socket.emit('error', { code: 'GAME_NOT_FOUND', message: 'No active game found' })
         return
       }
 
+      socketWalletMap.set(socket.id, wallet)
       socket.join(game.roomCode)
       const player = Object.values(game.players).find(
         p => p.walletAddress === payload.walletAddress.toLowerCase()
@@ -245,11 +264,60 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
     }
   })
 
+  // ── game:leave ──────────────────────────────────────────────────────────────
+  socket.on('game:leave', (payload: { walletAddress: string; roomCode: string }) => {
+    const { game, wasHost } = GameManager.leaveGame(payload.walletAddress, payload.roomCode)
+    socket.leave(payload.roomCode)
+
+    if (!game) return // lobby was empty and deleted
+
+    const lobby = serializeLobby(game)
+    io.to(payload.roomCode).emit('lobby:updated', lobby)
+
+    if (wasHost) {
+      io.to(payload.roomCode).emit('host:changed', {
+        newHostWalletAddress: lobby.hostWalletAddress,
+      })
+    }
+
+    if (game.type === 'public') {
+      io.emit('lobby:list_updated', GameManager.getPublicLobbies().map(serializeLobby))
+    }
+  })
+
   // ── disconnect ──────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
-    // We don't remove from game on disconnect — they can rejoin
-    // Just notify others in the room
-    // The game engine handles the timeout logic separately
+    const wallet = socketWalletMap.get(socket.id)
+    socketWalletMap.delete(socket.id)
+    if (!wallet) return
+
+    const game = GameManager.getGameByWallet(wallet)
+    if (!game || game.status === 'completed') return
+
+    io.to(game.roomCode).emit('player:disconnected', { walletAddress: wallet })
+
+    // Give them RECONNECT_TIMEOUT_MS to reconnect before removing from lobby
+    const timer = setTimeout(() => {
+      reconnectTimers.delete(wallet)
+      const current = GameManager.getGame(game.roomCode)
+      if (!current) return
+
+      if (current.status === 'lobby') {
+        const { game: updated } = GameManager.leaveGame(wallet, game.roomCode)
+        io.to(game.roomCode).emit('player:removed', { walletAddress: wallet })
+        if (updated) {
+          io.to(game.roomCode).emit('lobby:updated', serializeLobby(updated))
+          if (updated.type === 'public') {
+            io.emit('lobby:list_updated', GameManager.getPublicLobbies().map(serializeLobby))
+          }
+        }
+      } else {
+        // Active game — notify but keep them in (they can still rejoin)
+        io.to(game.roomCode).emit('player:removed', { walletAddress: wallet })
+      }
+    }, RECONNECT_TIMEOUT_MS)
+
+    reconnectTimers.set(wallet, timer)
   })
 }
 
