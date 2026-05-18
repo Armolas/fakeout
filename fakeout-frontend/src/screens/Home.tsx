@@ -22,6 +22,7 @@ interface Props {
   connectedWallet: string
   displayName: string
   onDisplayNameChange: (name: string) => void
+  playerStats: { gamesPlayed: number; gamesWon: number } | null
   error: string | null
   clearError: () => void
 }
@@ -34,6 +35,7 @@ export function Home({
   connectedWallet,
   displayName,
   onDisplayNameChange,
+  playerStats,
   error,
   clearError,
 }: Props) {
@@ -197,6 +199,25 @@ export function Home({
         <p className="balance-badge">
           G$ Balance: {formatUnits(balance as bigint, 18)}
         </p>
+      )}
+
+      {playerStats && playerStats.gamesPlayed > 0 && (
+        <div className="player-stats">
+          <div className="stat">
+            <span className="stat-value">{playerStats.gamesPlayed}</span>
+            <span className="stat-label">Played</span>
+          </div>
+          <div className="stat">
+            <span className="stat-value">{playerStats.gamesWon}</span>
+            <span className="stat-label">Won</span>
+          </div>
+          <div className="stat">
+            <span className="stat-value">
+              {Math.round((playerStats.gamesWon / playerStats.gamesPlayed) * 100)}%
+            </span>
+            <span className="stat-label">Win rate</span>
+          </div>
+        </div>
       )}
 
       {/* Display name */}

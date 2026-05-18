@@ -9,21 +9,23 @@ import { Results } from './screens/Results'
 export default function App() {
   const { address } = useAccount()
   const [displayName, setDisplayName] = useState('')
+  const [playerStats, setPlayerStats] = useState<{ gamesPlayed: number; gamesWon: number } | null>(null)
 
   const walletAddress = address?.toLowerCase() ?? ''
 
-  // Pre-fill display name from DB if the player has played before
+  // Pre-fill display name and stats from DB if the player has played before
   useEffect(() => {
     if (!walletAddress) return
     const backendUrl = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3001'
     fetch(`${backendUrl}/api/players/${walletAddress}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.player?.displayName) {
-          setDisplayName(data.player.displayName)
+        if (data?.player) {
+          if (data.player.displayName) setDisplayName(data.player.displayName)
+          setPlayerStats({ gamesPlayed: data.player.gamesPlayed, gamesWon: data.player.gamesWon })
         }
       })
-      .catch(() => {}) // silent — new player, no name yet
+      .catch(() => {}) // silent — new player
   }, [walletAddress])
 
   const game = useGame(walletAddress, displayName)
@@ -117,6 +119,7 @@ export default function App() {
       connectedWallet={walletAddress}
       displayName={displayName}
       onDisplayNameChange={setDisplayName}
+      playerStats={playerStats}
       error={game.error}
       clearError={game.clearError}
     />
