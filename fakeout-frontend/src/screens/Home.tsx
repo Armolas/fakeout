@@ -163,8 +163,7 @@ export function Home({
     return (
       <div className="screen center-content">
         <div className="logo">
-          <span className="logo-emoji">🎭</span>
-          <h1 className="logo-title">FAKEOUT</h1>
+          <img src="/icons/icon-192.png" alt="FAKEOUT" className="logo-img" />
           <p className="logo-sub">Social deduction on Celo</p>
         </div>
         <button
@@ -184,8 +183,8 @@ export function Home({
       {/* Header */}
       <div className="home-header">
         <div className="logo-row">
-          <span className="logo-emoji-sm">🎭</span>
-          <span className="logo-title-sm">FAKEOUT</span>
+          <img src="/icons/icon-192.png" alt="FAKEOUT" className="logo-img-sm" />
+    
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => disconnect()}>
           {shortenAddress(address ?? '')}
