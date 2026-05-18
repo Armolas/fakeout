@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { useGame } from './hooks/useGame'
 import { Home } from './screens/Home'
@@ -12,14 +12,28 @@ export default function App() {
 
   const walletAddress = address?.toLowerCase() ?? ''
 
+  // Pre-fill display name from DB if the player has played before
+  useEffect(() => {
+    if (!walletAddress) return
+    const backendUrl = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3001'
+    fetch(`${backendUrl}/api/players/${walletAddress}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.player?.displayName) {
+          setDisplayName(data.player.displayName)
+        }
+      })
+      .catch(() => {}) // silent — new player, no name yet
+  }, [walletAddress])
+
   const game = useGame(walletAddress, displayName)
 
-  function handleCreateGame(wallet: string, name: string, type: 'public' | 'private', stakeAmount: string) {
+  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string) {
     setDisplayName(name)
     game.createGame(type, stakeAmount)
   }
 
-  function handleJoinGame(wallet: string, name: string, roomCode?: string) {
+  function handleJoinGame(_wallet: string, name: string, roomCode?: string) {
     setDisplayName(name)
     game.joinGame(roomCode)
   }
