@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { injected } from 'wagmi/connectors'

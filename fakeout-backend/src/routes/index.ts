@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express'
+import { eq } from 'drizzle-orm'
 import { GameManager } from '../game/GameManager'
 import { db } from '../db'
+import { players } from '../db/schema'
 
 const router = Router()
 
@@ -19,14 +21,20 @@ router.get('/lobbies', (_req: Request, res: Response) => {
 // GET /api/players/:walletAddress — player profile
 router.get('/players/:walletAddress', async (req: Request, res: Response) => {
   try {
-    const result = await db.query(
-      'SELECT wallet_address, display_name, games_played, games_won, created_at FROM players WHERE wallet_address = $1',
-      [req.params.walletAddress.toLowerCase()]
-    )
-    if (!result.rows[0]) {
+    const [player] = await db
+      .select({
+        walletAddress: players.walletAddress,
+        displayName: players.displayName,
+        gamesPlayed: players.gamesPlayed,
+        gamesWon: players.gamesWon,
+        createdAt: players.createdAt,
+      })
+      .from(players)
+      .where(eq(players.walletAddress, req.params.walletAddress.toLowerCase()))
+    if (!player) {
       return res.status(404).json({ error: 'Player not found' })
     }
-    res.json({ player: result.rows[0] })
+    res.json({ player })
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' })
   }

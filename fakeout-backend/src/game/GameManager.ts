@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { eq, and, sql } from 'drizzle-orm'
 import {
   Game,
   GamePlayer,
@@ -10,6 +11,13 @@ import {
 } from '../types'
 import { selectWord } from '../services/wordService'
 import { db } from '../db'
+import {
+  players as playersTable,
+  games as gamesTable,
+  gamePlayers as gamePlayersTable,
+  clues as cluesTable,
+  votes as votesTable,
+} from '../db/schema'
 
 // ─── Impostor count by player count ──────────────────────────────────────────
 function getImpostorCount(playerCount: number): number {
@@ -45,18 +53,18 @@ export const GameManager = {
     stakeAmount: string
   }): Promise<Game> {
     // Upsert player
-    await db.query(`
-      INSERT INTO players (wallet_address, display_name)
-      VALUES ($1, $2)
-      ON CONFLICT (wallet_address)
-      DO UPDATE SET display_name = EXCLUDED.display_name
-    `, [params.walletAddress.toLowerCase(), params.displayName])
+    await db.insert(playersTable)
+      .values({ walletAddress: params.walletAddress.toLowerCase(), displayName: params.displayName })
+      .onConflictDoUpdate({
+        target: playersTable.walletAddress,
+        set: { displayName: params.displayName },
+      })
 
-    const playerResult = await db.query(
-      'SELECT id FROM players WHERE wallet_address = $1',
-      [params.walletAddress.toLowerCase()]
-    )
-    const playerId = playerResult.rows[0].id
+    const [playerRow] = await db
+      .select({ id: playersTable.id })
+      .from(playersTable)
+      .where(eq(playersTable.walletAddress, params.walletAddress.toLowerCase()))
+    const playerId = playerRow.id
 
     // Generate unique room code
     let roomCode = generateRoomCode()
@@ -100,15 +108,16 @@ export const GameManager = {
     playerGameMap.set(params.walletAddress.toLowerCase(), roomCode)
 
     // Persist skeleton to DB
-    await db.query(`
-      INSERT INTO games (id, room_code, type, status, stake_amount, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [gameId, roomCode, params.type, 'lobby', params.stakeAmount, playerId])
+    await db.insert(gamesTable).values({
+      id: gameId,
+      roomCode,
+      type: params.type,
+      status: 'lobby',
+      stakeAmount: params.stakeAmount,
+      createdBy: playerId,
+    })
 
-    await db.query(`
-      INSERT INTO game_players (game_id, player_id)
-      VALUES ($1, $2)
-    `, [gameId, playerId])
+    await db.insert(gamePlayersTable).values({ gameId, playerId })
 
     return game
   },
@@ -139,18 +148,18 @@ export const GameManager = {
     if (Object.keys(game.players).length >= 10) throw new Error('GAME_FULL')
 
     // Upsert player
-    await db.query(`
-      INSERT INTO players (wallet_address, display_name)
-      VALUES ($1, $2)
-      ON CONFLICT (wallet_address)
-      DO UPDATE SET display_name = EXCLUDED.display_name
-    `, [params.walletAddress.toLowerCase(), params.displayName])
+    await db.insert(playersTable)
+      .values({ walletAddress: params.walletAddress.toLowerCase(), displayName: params.displayName })
+      .onConflictDoUpdate({
+        target: playersTable.walletAddress,
+        set: { displayName: params.displayName },
+      })
 
-    const playerResult = await db.query(
-      'SELECT id, games_played FROM players WHERE wallet_address = $1',
-      [params.walletAddress.toLowerCase()]
-    )
-    const { id: playerId, games_played } = playerResult.rows[0]
+    const [playerRow] = await db
+      .select({ id: playersTable.id, gamesPlayed: playersTable.gamesPlayed })
+      .from(playersTable)
+      .where(eq(playersTable.walletAddress, params.walletAddress.toLowerCase()))
+    const { id: playerId, gamesPlayed: games_played } = playerRow
 
     // Check if already in game
     if (game.players[playerId]) throw new Error('ALREADY_IN_GAME')
@@ -171,11 +180,9 @@ export const GameManager = {
     game.players[playerId] = newPlayer
     playerGameMap.set(params.walletAddress.toLowerCase(), game.roomCode)
 
-    await db.query(`
-      INSERT INTO game_players (game_id, player_id, is_first_game)
-      VALUES ($1, $2, $3)
-      ON CONFLICT DO NOTHING
-    `, [game.id, playerId, isFirstGame])
+    await db.insert(gamePlayersTable)
+      .values({ gameId: game.id, playerId, isFirstGame })
+      .onConflictDoNothing()
 
     return game
   },
@@ -217,17 +224,14 @@ export const GameManager = {
     game.clues = [{ roundNumber: 1, clues: [] }]
 
     // Persist to DB
-    await db.query(`
-      UPDATE games
-      SET status = 'active', word = $1, hint = $2, current_round = 1
-      WHERE id = $3
-    `, [game.word, game.hint, game.id])
+    await db.update(gamesTable)
+      .set({ status: 'active', word: game.word, hint: game.hint, currentRound: 1 })
+      .where(eq(gamesTable.id, game.id))
 
     for (const player of playerList) {
-      await db.query(`
-        UPDATE game_players SET role = $1
-        WHERE game_id = $2 AND player_id = $3
-      `, [game.players[player.playerId].role, game.id, player.playerId])
+      await db.update(gamePlayersTable)
+        .set({ role: game.players[player.playerId].role })
+        .where(and(eq(gamePlayersTable.gameId, game.id), eq(gamePlayersTable.playerId, player.playerId)))
     }
 
     return game
@@ -268,15 +272,16 @@ export const GameManager = {
     game.players[player.playerId].hasSubmittedClue = true
 
     // Persist
-    await db.query(`
-      INSERT INTO clues (game_id, player_id, round_number, clue_text)
-      VALUES ($1, $2, $3, $4)
-    `, [game.id, player.playerId, game.currentRound, trimmed])
+    await db.insert(cluesTable).values({
+      gameId: game.id,
+      playerId: player.playerId,
+      roundNumber: game.currentRound,
+      clueText: trimmed,
+    })
 
-    await db.query(`
-      UPDATE game_players SET has_submitted_clue = TRUE
-      WHERE game_id = $1 AND player_id = $2
-    `, [game.id, player.playerId])
+    await db.update(gamePlayersTable)
+      .set({ hasSubmittedClue: true })
+      .where(and(eq(gamePlayersTable.gameId, game.id), eq(gamePlayersTable.playerId, player.playerId)))
 
     // Check if all active players have submitted
     const activePlayers = Object.values(game.players).filter(p => !p.isEliminated)
@@ -343,10 +348,12 @@ export const GameManager = {
     })
 
     // Persist
-    await db.query(`
-      INSERT INTO votes (game_id, voter_id, voted_for_id, vote_round)
-      VALUES ($1, $2, $3, $4)
-    `, [game.id, voter.playerId, votedFor.playerId, currentVoteRound.roundNumber])
+    await db.insert(votesTable).values({
+      gameId: game.id,
+      voterId: voter.playerId,
+      votedForId: votedFor.playerId,
+      voteRound: currentVoteRound.roundNumber,
+    })
 
     // Check if all active non-eliminated players voted
     const eligibleVoters = Object.values(game.players).filter(p => !p.isEliminated)
@@ -455,27 +462,27 @@ export const GameManager = {
     game.status = 'completed'
     game.completedAt = new Date()
 
-    await db.query(`
-      UPDATE games
-      SET status = 'completed', completed_at = NOW()
-      WHERE id = $1
-    `, [game.id])
+    await db.update(gamesTable)
+      .set({ status: 'completed', completedAt: new Date() })
+      .where(eq(gamesTable.id, game.id))
 
     // Update player stats
-    const players = Object.values(game.players)
-    for (const player of players) {
+    const playerList = Object.values(game.players)
+    for (const player of playerList) {
       const isWinner = resolution.winners.includes(player.walletAddress)
-      await db.query(`
-        UPDATE players
-        SET games_played = games_played + 1,
-            games_won = games_won + $1
-        WHERE id = $2
-      `, [isWinner ? 1 : 0, player.playerId])
+      await db.update(playersTable)
+        .set({
+          gamesPlayed: sql`${playersTable.gamesPlayed} + 1`,
+          gamesWon: isWinner
+            ? sql`${playersTable.gamesWon} + 1`
+            : playersTable.gamesWon,
+        })
+        .where(eq(playersTable.id, player.playerId))
     }
 
     // Clean up in-memory state after a delay (allow clients to read result)
     setTimeout(() => {
-      for (const player of players) {
+      for (const player of playerList) {
         playerGameMap.delete(player.walletAddress)
       }
       activeGames.delete(roomCode)
