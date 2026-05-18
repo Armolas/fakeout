@@ -1,0 +1,9 @@
+{
+  "network": "celo-sepolia",
+  "contractAddress": "0x4b33788935FEEDe1335aCa7355f377816aFFD95B",
+  "goodDollarAddress": "0x6E9E8EFa1339C63C650eaD4E4cc67373308F2e2f",
+  "treasuryAddress": "0x744cDf77b3bb55aDb00D608d9EE35C8B43d4b0C8",
+  "deployer": "0x744cDf77b3bb55aDb00D608d9EE35C8B43d4b0C8",
+  "deployedAt": "2026-05-18T15:37:10.708Z",
+  "txHash": "0x1e9dbe2246b0561e873cf03020a78df9b289a1b524ca84a3d03c4a70cf84b7f3"
+}

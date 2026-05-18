@@ -1,0 +1,57 @@
+import express from 'express'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import routes from './routes'
+import { registerSocketHandlers } from './socket/handlers'
+
+dotenv.config()
+
+const app = express()
+const httpServer = createServer(app)
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+  },
+  transports: ['websocket', 'polling'],
+})
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+}))
+app.use(express.json())
+
+// ─── REST routes ─────────────────────────────────────────────────────────────
+app.use('/api', routes)
+
+// ─── Socket.io ───────────────────────────────────────────────────────────────
+io.on('connection', (socket) => {
+  console.log(`[socket] connected: ${socket.id}`)
+  registerSocketHandlers(io, socket)
+
+  socket.on('disconnect', (reason) => {
+    console.log(`[socket] disconnected: ${socket.id} — ${reason}`)
+  })
+})
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3001
+
+httpServer.listen(PORT, () => {
+  console.log(`
+  ███████╗ █████╗ ██╗  ██╗███████╗ ██████╗ ██╗   ██╗████████╗
+  ██╔════╝██╔══██╗██║ ██╔╝██╔════╝██╔═══██╗██║   ██║╚══██╔══╝
+  █████╗  ███████║█████╔╝ █████╗  ██║   ██║██║   ██║   ██║
+  ██╔══╝  ██╔══██║██╔═██╗ ██╔══╝  ██║   ██║██║   ██║   ██║
+  ██║     ██║  ██║██║  ██╗███████╗╚██████╔╝╚██████╔╝   ██║
+  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝    ╚═╝
+
+  🎮 Backend running on port ${PORT}
+  `)
+})
+
+export { io }
