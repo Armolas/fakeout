@@ -95,8 +95,7 @@ export default function App() {
         roundTimeoutSeconds={game.roundTimeoutSeconds}
         voteTimeoutSeconds={game.voteTimeoutSeconds}
         hasSubmittedClue={game.hasSubmittedClue}
-        clueProgress={game.clueProgress}
-        roundClues={game.roundClues}
+        chatClues={game.chatClues}
         hasVoted={game.hasVoted}
         voteOptions={game.voteOptions}
         voteProgress={game.voteProgress}

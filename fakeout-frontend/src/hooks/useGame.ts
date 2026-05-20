@@ -39,6 +39,7 @@ interface GameState {
   clueProgress: { submitted: number; total: number } | null
   roundClues: RoundCluesPayload | null
   roundTimeoutSeconds: number
+  chatClues: Array<{ walletAddress: string; displayName: string; clueText: string }>
 
   // Vote phase
   hasVoted: boolean
@@ -72,6 +73,7 @@ const INITIAL_STATE: GameState = {
   clueProgress: null,
   roundClues: null,
   roundTimeoutSeconds: 60,
+  chatClues: [],
   hasVoted: false,
   voteOptions: [],
   voteProgress: null,
@@ -195,6 +197,7 @@ export function useGame(walletAddress: string, displayName: string) {
         hasSubmittedClue: false,
         clueProgress: null,
         roundClues: null,
+        chatClues: [],
         hasVoted: false,
         voteOptions: [],
         voteProgress: null,
@@ -214,6 +217,7 @@ export function useGame(walletAddress: string, displayName: string) {
         hasSubmittedClue: false,
         clueProgress: null,
         roundClues: null,
+        chatClues: [],
       })
     })
 
@@ -223,6 +227,10 @@ export function useGame(walletAddress: string, displayName: string) {
 
     socket.on('clue:progress', (data: { submitted: number; total: number }) => {
       patch({ clueProgress: data })
+    })
+
+    socket.on('clue:broadcast', (data: { walletAddress: string; displayName: string; clueText: string }) => {
+      setState(prev => ({ ...prev, chatClues: [...prev.chatClues, data] }))
     })
 
     socket.on('round:clues', (data: RoundCluesPayload) => {

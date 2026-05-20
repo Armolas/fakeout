@@ -218,7 +218,17 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       // Acknowledge to submitter
       socket.emit('clue:accepted', { clueText: payload.clueText })
 
-      // Broadcast live submission count (not the clue itself yet)
+      // Broadcast the clue as a chat bubble to everyone in the room
+      const submittingPlayer = Object.values(game.players).find(
+        p => p.walletAddress === payload.walletAddress.toLowerCase()
+      )
+      io.to(payload.roomCode).emit('clue:broadcast', {
+        walletAddress: payload.walletAddress.toLowerCase(),
+        displayName: submittingPlayer!.displayName,
+        clueText: payload.clueText.trim(),
+      })
+
+      // Broadcast live submission count
       const activePlayers = Object.values(game.players).filter(p => !p.isEliminated)
       const submitted = activePlayers.filter(p => p.hasSubmittedClue).length
 
@@ -339,7 +349,7 @@ function handleRoundComplete(io: Server, roomCode: string) {
     })) ?? [],
   })
 
-  // Wait 5s for players to read clues, then advance
+  // Wait 2s then advance
   setTimeout(() => {
     const { phase } = GameManager.advanceRound(roomCode)
 
@@ -366,7 +376,7 @@ function handleRoundComplete(io: Server, roomCode: string) {
       })
       setVoteTimer(io, roomCode)
     }
-  }, 5000)
+  }, 2000)
 }
 
 // ─── Vote complete handler ────────────────────────────────────────────────────

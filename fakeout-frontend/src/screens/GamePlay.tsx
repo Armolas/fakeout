@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   GamePhase,
   PublicPlayer,
-  RoundCluesPayload,
 } from '../types'
 
 interface Props {
@@ -16,8 +15,7 @@ interface Props {
   roundTimeoutSeconds: number
   voteTimeoutSeconds: number
   hasSubmittedClue: boolean
-  clueProgress: { submitted: number; total: number } | null
-  roundClues: RoundCluesPayload | null
+  chatClues: Array<{ walletAddress: string; displayName: string; clueText: string }>
   hasVoted: boolean
   voteOptions: PublicPlayer[]
   voteProgress: { votesIn: number; totalVoters: number } | null
@@ -41,8 +39,7 @@ export function GamePlay({
   roundTimeoutSeconds,
   voteTimeoutSeconds,
   hasSubmittedClue,
-  clueProgress,
-  roundClues,
+  chatClues,
   hasVoted,
   voteOptions,
   voteProgress,
@@ -57,6 +54,7 @@ export function GamePlay({
   const [clueText, setClueText] = useState('')
   const [timeLeft, setTimeLeft] = useState(roundTimeoutSeconds)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   // Reset clue input on new round
   useEffect(() => {
@@ -92,6 +90,10 @@ export function GamePlay({
       timerRef.current = null
     }
   }
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatClues])
 
   function handleSubmitClue() {
     const trimmed = clueText.trim()
@@ -132,59 +134,55 @@ export function GamePlay({
     )
   }
 
-  // ── Clue phase ─────────────────────────────────────────────────────────────
-  if (phase === 'clue_phase') {
+  // ── Clue phase + reviewing clues (unified chat view) ──────────────────────
+  if (phase === 'clue_phase' || phase === 'reviewing_clues') {
+    const isClosed = phase === 'reviewing_clues'
     const isMultiWord = clueText.trim().includes(' ')
 
     return (
-      <div className="screen">
+      <div className="screen chat-screen">
+        <div className="chat-word-bar">
+          {role === 'crewmate'
+            ? <span>Word: <strong>{word}</strong></span>
+            : <span>Hint: <strong>{hint}</strong> · Impostor</span>}
+        </div>
+
         <div className="game-header">
           <span className="round-badge">Round {currentRound}/{totalRounds}</span>
-          <Timer seconds={timeLeft} warn={timeLeft <= 10} />
+          {isClosed
+            ? <span className="timer timer-warn">0s</span>
+            : <Timer seconds={timeLeft} warn={timeLeft <= 10} />}
         </div>
 
         {error && <div className="error-banner" onClick={clearError}>{error}</div>}
 
-        <div className="word-reminder">
-          {role === 'crewmate' ? (
-            <span>Word: <strong>{word}</strong></span>
-          ) : (
-            <span>Hint: <strong>{hint}</strong> · You are the impostor</span>
-          )}
+        <div className="chat-messages">
+          {chatClues.map((entry, i) => {
+            const isMine = entry.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+            return (
+              <div key={i} className={`chat-bubble-row ${isMine ? 'mine' : 'theirs'}`}>
+                {!isMine && <span className="chat-name">{entry.displayName}</span>}
+                <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`}>
+                  {entry.clueText}
+                </div>
+              </div>
+            )
+          })}
+          <div ref={chatEndRef} />
         </div>
 
-        <div className="players-row">
-          {players.map(p => (
-            <div key={p.walletAddress} className="player-chip">
-              {p.displayName[0]?.toUpperCase()}
+        <div className="chat-input-bar">
+          {isClosed ? (
+            <div className="chat-closed-banner">Chat closed · Voting soon…</div>
+          ) : hasSubmittedClue ? (
+            <div className="submitted-notice">
+              <span className="check">✓</span> Clue sent. Waiting for others…
             </div>
-          ))}
-        </div>
-
-        {clueProgress && (
-          <div className="progress-bar-wrap">
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${(clueProgress.submitted / clueProgress.total) * 100}%` }}
-            />
-            <span className="progress-label">
-              {clueProgress.submitted}/{clueProgress.total} clues submitted
-            </span>
-          </div>
-        )}
-
-        {hasSubmittedClue ? (
-          <div className="submitted-notice">
-            <span className="check">✓</span>
-            <span>Clue submitted. Waiting for others…</span>
-          </div>
-        ) : (
-          <div className="clue-input-area">
-            <label className="label">Your clue — one word only</label>
+          ) : (
             <div className="clue-row">
               <input
                 className={`input ${isMultiWord ? 'input-error' : ''}`}
-                placeholder="e.g. fluffy"
+                placeholder="One word…"
                 value={clueText}
                 maxLength={30}
                 onChange={e => setClueText(e.target.value)}
@@ -196,34 +194,14 @@ export function GamePlay({
                 disabled={!clueText.trim() || isMultiWord}
                 onClick={handleSubmitClue}
               >
-                Submit
+                Send
               </button>
             </div>
-            {isMultiWord && <p className="field-error">One word only — no spaces!</p>}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ── Reviewing clues ────────────────────────────────────────────────────────
-  if (phase === 'reviewing_clues' && roundClues) {
-    return (
-      <div className="screen">
-        <div className="game-header">
-          <span className="round-badge">Round {roundClues.roundNumber} clues</span>
+          )}
+          {isMultiWord && !hasSubmittedClue && !isClosed && (
+            <p className="field-error">One word only — no spaces!</p>
+          )}
         </div>
-
-        <div className="clue-list">
-          {roundClues.clues.map((c, i) => (
-            <div key={i} className="clue-card">
-              <span className="clue-author">{c.displayName}</span>
-              <span className="clue-word">{c.clueText}</span>
-            </div>
-          ))}
-        </div>
-
-        <p className="muted center">Voting starts soon…</p>
       </div>
     )
   }
