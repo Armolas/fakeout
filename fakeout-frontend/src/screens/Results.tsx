@@ -22,6 +22,19 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
       <div className="results">
         {/* Outcome banner */}
         <div className={`outcome-banner ${crewmatesWin ? 'crewmates-win' : 'impostor-wins'}`}>
+          {isWinner && (
+            <div className="confetti" aria-hidden="true">
+              {['⭐','✨','🌟','💫','⚡','🎊'].map((s, i) => (
+                <span key={i} style={{
+                  left: `${10 + i * 14}%`,
+                  top: '15%',
+                  '--tx': `${(i % 2 === 0 ? 1 : -1) * (18 + i * 9)}px`,
+                  '--ty': `${-(28 + i * 13)}px`,
+                  animationDelay: `${i * 0.09}s`,
+                } as React.CSSProperties}>{s}</span>
+              ))}
+            </div>
+          )}
           <span className="outcome-icon">{crewmatesWin ? '🕵️' : '👁'}</span>
           <h1 className="outcome-title">
             {crewmatesWin ? 'Crewmates Win!' : 'Impostor Wins!'}
