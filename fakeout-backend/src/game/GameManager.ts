@@ -51,6 +51,7 @@ export const GameManager = {
     displayName: string
     type: GameType
     stakeAmount: string
+    discussionSeconds: number
   }): Promise<Game> {
     // Upsert player
     await db.insert(playersTable)
@@ -96,7 +97,8 @@ export const GameManager = {
       potAmount: '0',
       contractGameId: null,
       currentRound: 0,
-      maxRounds: parseInt(process.env.MAX_ROUNDS || '3'),
+      maxRounds: 1,
+      discussionSeconds: Math.min(600, Math.max(30, params.discussionSeconds)),
       createdBy: playerId,
       players: { [playerId]: hostPlayer },
       clues: [],
@@ -237,12 +239,12 @@ export const GameManager = {
     return game
   },
 
-  // ── Submit a clue ────────────────────────────────────────────────────────────
-  async submitClue(params: {
+  // ── Send a chat message during the discussion phase ──────────────────────────
+  async sendChatMessage(params: {
     roomCode: string
     walletAddress: string
-    clueText: string
-  }): Promise<{ game: Game; roundComplete: boolean }> {
+    text: string
+  }): Promise<{ game: Game }> {
     const game = activeGames.get(params.roomCode)
     if (!game) throw new Error('GAME_NOT_FOUND')
     if (game.status !== 'active') throw new Error('NOT_IN_CLUE_PHASE')
@@ -252,26 +254,20 @@ export const GameManager = {
     )
     if (!player) throw new Error('PLAYER_NOT_IN_GAME')
     if (player.isEliminated) throw new Error('PLAYER_ELIMINATED')
-    if (player.hasSubmittedClue) throw new Error('CLUE_ALREADY_SUBMITTED')
 
-    // Validate: single word only
-    const trimmed = params.clueText.trim()
-    if (!trimmed || trimmed.includes(' ')) throw new Error('CLUE_MUST_BE_SINGLE_WORD')
+    const trimmed = params.text.trim()
+    if (!trimmed) throw new Error('EMPTY_MESSAGE')
 
-    // Add clue
     const currentRoundClues = game.clues.find(r => r.roundNumber === game.currentRound)
-    if (!currentRoundClues) throw new Error('ROUND_NOT_FOUND')
+    if (currentRoundClues) {
+      currentRoundClues.clues.push({
+        playerId: player.playerId,
+        displayName: player.displayName,
+        clueText: trimmed,
+        submittedAt: new Date(),
+      })
+    }
 
-    currentRoundClues.clues.push({
-      playerId: player.playerId,
-      displayName: player.displayName,
-      clueText: trimmed,
-      submittedAt: new Date(),
-    })
-
-    game.players[player.playerId].hasSubmittedClue = true
-
-    // Persist
     await db.insert(cluesTable).values({
       gameId: game.id,
       playerId: player.playerId,
@@ -279,26 +275,13 @@ export const GameManager = {
       clueText: trimmed,
     })
 
-    await db.update(gamePlayersTable)
-      .set({ hasSubmittedClue: true })
-      .where(and(eq(gamePlayersTable.gameId, game.id), eq(gamePlayersTable.playerId, player.playerId)))
-
-    // Check if all active players have submitted
-    const activePlayers = Object.values(game.players).filter(p => !p.isEliminated)
-    const allSubmitted = activePlayers.every(p => p.hasSubmittedClue)
-
-    return { game, roundComplete: allSubmitted }
+    return { game }
   },
 
-  // ── Advance to next round or voting ─────────────────────────────────────────
+  // ── Advance to voting (single round, always goes to voting) ──────────────────
   advanceRound(roomCode: string): { game: Game; phase: 'next_round' | 'voting' } {
     const game = activeGames.get(roomCode)
     if (!game) throw new Error('GAME_NOT_FOUND')
-
-    // Reset clue submission flags
-    for (const playerId of Object.keys(game.players)) {
-      game.players[playerId].hasSubmittedClue = false
-    }
 
     if (game.currentRound >= game.maxRounds) {
       // Move to voting

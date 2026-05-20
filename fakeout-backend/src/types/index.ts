@@ -66,6 +66,7 @@ export interface Game {
   contractGameId: string | null
   currentRound: number
   maxRounds: number
+  discussionSeconds: number
   createdBy: string        // playerId
   players: Record<string, GamePlayer>  // keyed by playerId
   clues: ClueRound[]
@@ -110,6 +111,7 @@ export interface CreateGamePayload {
   displayName: string
   type: GameType
   stakeAmount: string
+  discussionSeconds: number
 }
 
 export interface JoinGamePayload {
@@ -128,10 +130,10 @@ export interface StartGamePayload {
   hostWalletAddress: string
 }
 
-export interface SubmitCluePayload {
+export interface ChatMessagePayload {
   roomCode: string
   walletAddress: string
-  clueText: string
+  text: string
 }
 
 export interface SubmitVotePayload {

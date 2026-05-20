@@ -6,7 +6,6 @@ import type {
   LobbyPlayer,
   LobbyState,
   PublicPlayer,
-  RoundCluesPayload,
   TiebreakPayload,
   VoteStartedPayload,
 } from '../types'
@@ -23,6 +22,7 @@ interface GameState {
   // Lobby
   roomCode: string
   stakeAmount: string
+  discussionSeconds: number
   lobbyPlayers: LobbyPlayer[]
   hostWalletAddress: string
 
@@ -34,12 +34,9 @@ interface GameState {
   totalRounds: number
   currentRound: number
 
-  // Clue phase
-  hasSubmittedClue: boolean
-  clueProgress: { submitted: number; total: number } | null
-  roundClues: RoundCluesPayload | null
+  // Discussion phase
   roundTimeoutSeconds: number
-  chatClues: Array<{ walletAddress: string; displayName: string; clueText: string }>
+  chatMessages: Array<{ walletAddress: string; displayName: string; text: string }>
 
   // Vote phase
   hasVoted: boolean
@@ -61,19 +58,17 @@ const INITIAL_STATE: GameState = {
   error: null,
   roomCode: '',
   stakeAmount: '0',
+  discussionSeconds: 120,
   lobbyPlayers: [],
   hostWalletAddress: '',
   role: null,
   word: '',
   hint: '',
   players: [],
-  totalRounds: 3,
+  totalRounds: 1,
   currentRound: 1,
-  hasSubmittedClue: false,
-  clueProgress: null,
-  roundClues: null,
-  roundTimeoutSeconds: 60,
-  chatClues: [],
+  roundTimeoutSeconds: 120,
+  chatMessages: [],
   hasVoted: false,
   voteOptions: [],
   voteProgress: null,
@@ -123,6 +118,7 @@ export function useGame(walletAddress: string, displayName: string) {
         phase: 'lobby',
         roomCode,
         stakeAmount: lobby.stakeAmount,
+        discussionSeconds: lobby.discussionSeconds,
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         error: null,
@@ -134,6 +130,7 @@ export function useGame(walletAddress: string, displayName: string) {
         phase: 'lobby',
         roomCode,
         stakeAmount: lobby.stakeAmount,
+        discussionSeconds: lobby.discussionSeconds,
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         error: null,
@@ -145,6 +142,7 @@ export function useGame(walletAddress: string, displayName: string) {
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         stakeAmount: lobby.stakeAmount,
+        discussionSeconds: lobby.discussionSeconds,
       })
     })
 
@@ -194,10 +192,7 @@ export function useGame(walletAddress: string, displayName: string) {
         role: data.role,
         players: data.players,
         totalRounds: data.totalRounds,
-        hasSubmittedClue: false,
-        clueProgress: null,
-        roundClues: null,
-        chatClues: [],
+        chatMessages: [],
         hasVoted: false,
         voteOptions: [],
         voteProgress: null,
@@ -214,27 +209,12 @@ export function useGame(walletAddress: string, displayName: string) {
         currentRound: data.roundNumber,
         totalRounds: data.totalRounds,
         roundTimeoutSeconds: data.timeoutSeconds,
-        hasSubmittedClue: false,
-        clueProgress: null,
-        roundClues: null,
-        chatClues: [],
+        chatMessages: [],
       })
     })
 
-    socket.on('clue:accepted', () => {
-      patch({ hasSubmittedClue: true })
-    })
-
-    socket.on('clue:progress', (data: { submitted: number; total: number }) => {
-      patch({ clueProgress: data })
-    })
-
-    socket.on('clue:broadcast', (data: { walletAddress: string; displayName: string; clueText: string }) => {
-      setState(prev => ({ ...prev, chatClues: [...prev.chatClues, data] }))
-    })
-
-    socket.on('round:clues', (data: RoundCluesPayload) => {
-      patch({ phase: 'reviewing_clues', roundClues: data })
+    socket.on('chat:message', (data: { walletAddress: string; displayName: string; text: string }) => {
+      setState(prev => ({ ...prev, chatMessages: [...prev.chatMessages, data] }))
     })
 
     // ── Vote events ───────────────────────────────────────────────────────────
@@ -327,13 +307,14 @@ export function useGame(walletAddress: string, displayName: string) {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
-  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string) => {
+  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) => {
     patch({ error: null })
     socketRef.current?.emit('game:create', {
       walletAddress: walletRef.current,
       displayName,
       type,
       stakeAmount,
+      discussionSeconds,
     })
   }, [displayName])
 
@@ -360,12 +341,12 @@ export function useGame(walletAddress: string, displayName: string) {
     })
   }, [state.roomCode])
 
-  const submitClue = useCallback((clueText: string) => {
+  const sendChatMessage = useCallback((text: string) => {
     patch({ error: null })
-    socketRef.current?.emit('clue:submit', {
+    socketRef.current?.emit('chat:message', {
       roomCode: state.roomCode,
       walletAddress: walletRef.current,
-      clueText,
+      text,
     })
   }, [state.roomCode])
 
@@ -397,7 +378,7 @@ export function useGame(walletAddress: string, displayName: string) {
     joinGame,
     rejoinGame,
     startGame,
-    submitClue,
+    sendChatMessage,
     submitVote,
     clearError,
     resetGame,

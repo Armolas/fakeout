@@ -4,6 +4,7 @@ import type { LobbyPlayer } from '../types'
 interface Props {
   roomCode: string
   stakeAmount: string
+  discussionSeconds: number
   players: LobbyPlayer[]
   isHost: boolean
   hostWalletAddress: string
@@ -17,6 +18,7 @@ interface Props {
 export function GameLobby({
   roomCode,
   stakeAmount,
+  discussionSeconds,
   players,
   isHost,
   onStart,
@@ -43,6 +45,7 @@ export function GameLobby({
       <div className="lobby-meta">
         <span className="badge">{stakeLabel}</span>
         <span className="badge">{players.length}/10 players</span>
+        <span className="badge">{discussionSeconds / 60} min discussion</span>
       </div>
 
       {error && (

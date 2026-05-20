@@ -16,9 +16,16 @@ const STAKE_OPTIONS = [
   { label: '10 G$', value: '10000000000000000000' },
 ]
 
+const DISCUSSION_OPTIONS = [
+  { label: '1 min', value: 60 },
+  { label: '2 min', value: 120 },
+  { label: '3 min', value: 180 },
+  { label: '5 min', value: 300 },
+]
+
 interface Props {
   onJoinGame: (walletAddress: string, displayName: string, roomCode?: string) => void
-  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string) => void
+  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) => void
   connectedWallet: string
   displayName: string
   onDisplayNameChange: (name: string) => void
@@ -47,6 +54,7 @@ export function Home({
   const [roomCode, setRoomCode] = useState('')
   const [gameType, setGameType] = useState<'public' | 'private'>('public')
   const [stakeAmount, setStakeAmount] = useState(STAKE_OPTIONS[0].value)
+  const [discussionSeconds, setDiscussionSeconds] = useState(120)
   const [lobbies, setLobbies] = useState<PublicLobby[]>([])
   const [loadingLobbies, setLoadingLobbies] = useState(false)
   const [needsApproval, setNeedsApproval] = useState(false)
@@ -84,7 +92,7 @@ export function Home({
 
     const wallet = address!.toLowerCase()
     if (pendingAction === 'create') {
-      onCreateGame(wallet, displayName, gameType, stakeAmount)
+      onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds)
     } else {
       onJoinGame(wallet, displayName, roomCode || undefined)
     }
@@ -138,7 +146,7 @@ export function Home({
       return
     }
 
-    onCreateGame(wallet, displayName, gameType, stakeAmount)
+    onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds)
   }
 
   function handleJoin(code?: string) {
@@ -295,6 +303,21 @@ export function Home({
               >
                 Private
               </button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label">Discussion time</label>
+            <div className="stake-grid">
+              {DISCUSSION_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  className={`stake-option ${discussionSeconds === opt.value ? 'active' : ''}`}
+                  onClick={() => setDiscussionSeconds(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 

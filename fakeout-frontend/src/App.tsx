@@ -30,9 +30,9 @@ export default function App() {
 
   const game = useGame(walletAddress, displayName)
 
-  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string) {
+  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) {
     setDisplayName(name)
-    game.createGame(type, stakeAmount)
+    game.createGame(type, stakeAmount, discussionSeconds)
   }
 
   function handleJoinGame(_wallet: string, name: string, roomCode?: string) {
@@ -63,6 +63,7 @@ export default function App() {
       <GameLobby
         roomCode={game.roomCode}
         stakeAmount={game.stakeAmount}
+        discussionSeconds={game.discussionSeconds}
         players={game.lobbyPlayers}
         isHost={game.isHost}
         hostWalletAddress={game.hostWalletAddress}
@@ -90,12 +91,9 @@ export default function App() {
         word={game.word}
         hint={game.hint}
         players={game.players}
-        currentRound={game.currentRound}
-        totalRounds={game.totalRounds}
         roundTimeoutSeconds={game.roundTimeoutSeconds}
         voteTimeoutSeconds={game.voteTimeoutSeconds}
-        hasSubmittedClue={game.hasSubmittedClue}
-        chatClues={game.chatClues}
+        chatMessages={game.chatMessages}
         hasVoted={game.hasVoted}
         voteOptions={game.voteOptions}
         voteProgress={game.voteProgress}
@@ -104,7 +102,7 @@ export default function App() {
         walletAddress={walletAddress}
         error={game.error}
         clearError={game.clearError}
-        onSubmitClue={game.submitClue}
+        onSendMessage={game.sendChatMessage}
         onSubmitVote={game.submitVote}
       />
     )

@@ -4,11 +4,10 @@ import {
   CreateGamePayload,
   JoinGamePayload,
   StartGamePayload,
-  SubmitCluePayload,
+  ChatMessagePayload,
   SubmitVotePayload,
   RejoinGamePayload,
   Game,
-  GamePlayer,
 } from '../types'
 
 const CLUE_TIMEOUT = parseInt(process.env.CLUE_TIMEOUT_SECONDS || '60') * 1000
@@ -39,6 +38,7 @@ function serializeLobby(game: Game) {
     roomCode: game.roomCode,
     type: game.type,
     stakeAmount: game.stakeAmount,
+    discussionSeconds: game.discussionSeconds,
     hostWalletAddress: Object.values(game.players).find(
       p => p.playerId === game.createdBy
     )?.walletAddress,
@@ -61,6 +61,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         displayName: payload.displayName,
         type: payload.type,
         stakeAmount: payload.stakeAmount,
+        discussionSeconds: payload.discussionSeconds ?? 120,
       })
 
       GameManager.setPlayerSocket(payload.walletAddress, socket.id)
@@ -191,11 +192,11 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         io.to(game.roomCode).emit('round:started', {
           roundNumber: 1,
           totalRounds: game.maxRounds,
-          timeoutSeconds: CLUE_TIMEOUT / 1000,
+          timeoutSeconds: game.discussionSeconds,
         })
 
-        // Auto-advance if clue timeout expires
-        setRoundTimer(io, game.roomCode, 1)
+        // Auto-advance when discussion timer expires
+        setRoundTimer(io, game.roomCode, 1, game.discussionSeconds * 1000)
       }, 3000) // 3s buffer after word reveal
 
       if (game.type === 'public') {
@@ -206,41 +207,24 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
     }
   })
 
-  // ── clue:submit ─────────────────────────────────────────────────────────────
-  socket.on('clue:submit', async (payload: SubmitCluePayload) => {
+  // ── chat:message ─────────────────────────────────────────────────────────────
+  socket.on('chat:message', async (payload: ChatMessagePayload) => {
     try {
-      const { game, roundComplete } = await GameManager.submitClue({
+      const { game } = await GameManager.sendChatMessage({
         roomCode: payload.roomCode,
         walletAddress: payload.walletAddress,
-        clueText: payload.clueText,
+        text: payload.text,
       })
 
-      // Acknowledge to submitter
-      socket.emit('clue:accepted', { clueText: payload.clueText })
-
-      // Broadcast the clue as a chat bubble to everyone in the room
-      const submittingPlayer = Object.values(game.players).find(
+      const sender = Object.values(game.players).find(
         p => p.walletAddress === payload.walletAddress.toLowerCase()
       )
-      io.to(payload.roomCode).emit('clue:broadcast', {
+
+      io.to(payload.roomCode).emit('chat:message', {
         walletAddress: payload.walletAddress.toLowerCase(),
-        displayName: submittingPlayer!.displayName,
-        clueText: payload.clueText.trim(),
+        displayName: sender!.displayName,
+        text: payload.text.trim(),
       })
-
-      // Broadcast live submission count
-      const activePlayers = Object.values(game.players).filter(p => !p.isEliminated)
-      const submitted = activePlayers.filter(p => p.hasSubmittedClue).length
-
-      io.to(payload.roomCode).emit('clue:progress', {
-        submitted,
-        total: activePlayers.length,
-      })
-
-      if (roundComplete) {
-        clearTimer(`${payload.roomCode}:round:${game.currentRound}`)
-        handleRoundComplete(io, game.roomCode)
-      }
     } catch (err: any) {
       socket.emit('error', { code: err.message, message: err.message })
     }
@@ -336,47 +320,31 @@ function handleRoundComplete(io: Server, roomCode: string) {
   const game = GameManager.getGame(roomCode)
   if (!game) return
 
-  // Reveal all clues for this round
-  const currentRoundClues = game.clues.find(r => r.roundNumber === game.currentRound)
-  io.to(roomCode).emit('round:clues', {
-    roundNumber: game.currentRound,
-    clues: currentRoundClues?.clues.map(c => ({
-      displayName: c.displayName,
-      walletAddress: Object.values(game.players).find(
-        p => p.playerId === c.playerId
-      )?.walletAddress,
-      clueText: c.clueText,
-    })) ?? [],
-  })
+  // Discussion time is over — advance immediately
+  const { phase } = GameManager.advanceRound(roomCode)
 
-  // Wait 2s then advance
-  setTimeout(() => {
-    const { phase } = GameManager.advanceRound(roomCode)
-
-    if (phase === 'next_round') {
-      const updatedGame = GameManager.getGame(roomCode)!
-      io.to(roomCode).emit('round:started', {
-        roundNumber: updatedGame.currentRound,
-        totalRounds: updatedGame.maxRounds,
-        timeoutSeconds: CLUE_TIMEOUT / 1000,
-      })
-      setRoundTimer(io, roomCode, updatedGame.currentRound)
-    } else {
-      // Voting phase
-      const updatedGame = GameManager.getGame(roomCode)!
-      io.to(roomCode).emit('vote:started', {
-        players: Object.values(updatedGame.players)
-          .filter(p => !p.isEliminated)
-          .map(p => ({
-            walletAddress: p.walletAddress,
-            displayName: p.displayName,
-          })),
-        timeoutSeconds: VOTE_TIMEOUT / 1000,
-        voteRoundNumber: 1,
-      })
-      setVoteTimer(io, roomCode)
-    }
-  }, 2000)
+  if (phase === 'next_round') {
+    const updatedGame = GameManager.getGame(roomCode)!
+    io.to(roomCode).emit('round:started', {
+      roundNumber: updatedGame.currentRound,
+      totalRounds: updatedGame.maxRounds,
+      timeoutSeconds: updatedGame.discussionSeconds,
+    })
+    setRoundTimer(io, roomCode, updatedGame.currentRound, updatedGame.discussionSeconds * 1000)
+  } else {
+    const updatedGame = GameManager.getGame(roomCode)!
+    io.to(roomCode).emit('vote:started', {
+      players: Object.values(updatedGame.players)
+        .filter(p => !p.isEliminated)
+        .map(p => ({
+          walletAddress: p.walletAddress,
+          displayName: p.displayName,
+        })),
+      timeoutSeconds: VOTE_TIMEOUT / 1000,
+      voteRoundNumber: 1,
+    })
+    setVoteTimer(io, roomCode)
+  }
 }
 
 // ─── Vote complete handler ────────────────────────────────────────────────────
@@ -458,14 +426,13 @@ function handleVoteComplete(io: Server, roomCode: string) {
 
 // ─── Timers ───────────────────────────────────────────────────────────────────
 
-function setRoundTimer(io: Server, roomCode: string, roundNumber: number) {
+function setRoundTimer(io: Server, roomCode: string, roundNumber: number, timeoutMs = CLUE_TIMEOUT) {
   clearTimer(`${roomCode}:round:${roundNumber}`)
   const timer = setTimeout(() => {
-    // Force-advance even if not everyone submitted
     const game = GameManager.getGame(roomCode)
     if (!game || game.status !== 'active') return
     handleRoundComplete(io, roomCode)
-  }, CLUE_TIMEOUT)
+  }, timeoutMs)
   roundTimers.set(`${roomCode}:round:${roundNumber}`, timer)
 }
 

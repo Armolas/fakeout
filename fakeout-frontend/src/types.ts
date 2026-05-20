@@ -33,6 +33,7 @@ export interface LobbyState {
   roomCode: string
   type: GameType
   stakeAmount: string
+  discussionSeconds: number
   hostWalletAddress: string
   players: LobbyPlayer[]
 }

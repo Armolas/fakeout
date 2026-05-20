@@ -10,12 +10,9 @@ interface Props {
   word: string
   hint: string
   players: PublicPlayer[]
-  currentRound: number
-  totalRounds: number
   roundTimeoutSeconds: number
   voteTimeoutSeconds: number
-  hasSubmittedClue: boolean
-  chatClues: Array<{ walletAddress: string; displayName: string; clueText: string }>
+  chatMessages: Array<{ walletAddress: string; displayName: string; text: string }>
   hasVoted: boolean
   voteOptions: PublicPlayer[]
   voteProgress: { votesIn: number; totalVoters: number } | null
@@ -24,7 +21,7 @@ interface Props {
   walletAddress: string
   error: string | null
   clearError: () => void
-  onSubmitClue: (clue: string) => void
+  onSendMessage: (text: string) => void
   onSubmitVote: (walletAddress: string) => void
 }
 
@@ -34,12 +31,9 @@ export function GamePlay({
   word,
   hint,
   players,
-  currentRound,
-  totalRounds,
   roundTimeoutSeconds,
   voteTimeoutSeconds,
-  hasSubmittedClue,
-  chatClues,
+  chatMessages,
   hasVoted,
   voteOptions,
   voteProgress,
@@ -48,18 +42,16 @@ export function GamePlay({
   walletAddress,
   error,
   clearError,
-  onSubmitClue,
+  onSendMessage,
   onSubmitVote,
 }: Props) {
-  const [clueText, setClueText] = useState('')
+  const [messageText, setMessageText] = useState('')
   const [timeLeft, setTimeLeft] = useState(roundTimeoutSeconds)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
-  // Reset clue input on new round
   useEffect(() => {
     if (phase === 'clue_phase') {
-      setClueText('')
       setTimeLeft(roundTimeoutSeconds)
       startTimer(roundTimeoutSeconds)
     }
@@ -68,7 +60,7 @@ export function GamePlay({
       startTimer(voteTimeoutSeconds)
     }
     return () => stopTimer()
-  }, [phase, currentRound]) // eslint-disable-line
+  }, [phase]) // eslint-disable-line
 
   function startTimer(seconds: number) {
     stopTimer()
@@ -93,13 +85,13 @@ export function GamePlay({
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatClues])
+  }, [chatMessages])
 
-  function handleSubmitClue() {
-    const trimmed = clueText.trim()
-    if (!trimmed || trimmed.includes(' ')) return
-    onSubmitClue(trimmed)
-    setClueText('')
+  function handleSend() {
+    const trimmed = messageText.trim()
+    if (!trimmed) return
+    onSendMessage(trimmed)
+    setMessageText('')
   }
 
   // ── Word reveal phase ──────────────────────────────────────────────────────
@@ -137,7 +129,6 @@ export function GamePlay({
   // ── Clue phase + reviewing clues (unified chat view) ──────────────────────
   if (phase === 'clue_phase' || phase === 'reviewing_clues') {
     const isClosed = phase === 'reviewing_clues'
-    const isMultiWord = clueText.trim().includes(' ')
 
     return (
       <div className="screen chat-screen">
@@ -148,7 +139,7 @@ export function GamePlay({
         </div>
 
         <div className="game-header">
-          <span className="round-badge">Round {currentRound}/{totalRounds}</span>
+          <span className="round-badge">Discussion</span>
           {isClosed
             ? <span className="timer timer-warn">0s</span>
             : <Timer seconds={timeLeft} warn={timeLeft <= 10} />}
@@ -157,13 +148,13 @@ export function GamePlay({
         {error && <div className="error-banner" onClick={clearError}>{error}</div>}
 
         <div className="chat-messages">
-          {chatClues.map((entry, i) => {
+          {chatMessages.map((entry, i) => {
             const isMine = entry.walletAddress.toLowerCase() === walletAddress.toLowerCase()
             return (
               <div key={i} className={`chat-bubble-row ${isMine ? 'mine' : 'theirs'}`}>
                 {!isMine && <span className="chat-name">{entry.displayName}</span>}
                 <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`}>
-                  {entry.clueText}
+                  {entry.text}
                 </div>
               </div>
             )
@@ -174,32 +165,25 @@ export function GamePlay({
         <div className="chat-input-bar">
           {isClosed ? (
             <div className="chat-closed-banner">Chat closed · Voting soon…</div>
-          ) : hasSubmittedClue ? (
-            <div className="submitted-notice">
-              <span className="check">✓</span> Clue sent. Waiting for others…
-            </div>
           ) : (
             <div className="clue-row">
               <input
-                className={`input ${isMultiWord ? 'input-error' : ''}`}
-                placeholder="One word…"
-                value={clueText}
-                maxLength={30}
-                onChange={e => setClueText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmitClue()}
+                className="input"
+                placeholder="Say something…"
+                value={messageText}
+                maxLength={200}
+                onChange={e => setMessageText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
                 autoFocus
               />
               <button
                 className="btn btn-primary"
-                disabled={!clueText.trim() || isMultiWord}
-                onClick={handleSubmitClue}
+                disabled={!messageText.trim()}
+                onClick={handleSend}
               >
                 Send
               </button>
             </div>
-          )}
-          {isMultiWord && !hasSubmittedClue && !isClosed && (
-            <p className="field-error">One word only — no spaces!</p>
           )}
         </div>
       </div>
