@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { formatUnits } from 'viem'
+import { useAccount, useBalance, useReadContract } from 'wagmi'
+import { GOOD_DOLLAR_ADDRESS } from '../config/contracts'
+import { ERC20_ABI } from '../config/contracts'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { UBIBanner } from '../components/UBIBanner'
 import { useTheme } from '../hooks/useTheme'
@@ -26,6 +29,15 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
+  const { address } = useAccount()
+  const { data: celoBalance } = useBalance({ address, query: { enabled: !!address } })
+  const { data: gdBalance } = useReadContract({
+    address: GOOD_DOLLAR_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  })
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
 
   function saveEdit() {
@@ -103,6 +115,25 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
             {copied ? '✓ Copied' : 'Copy'}
           </span>
         </button>
+      </div>
+
+      {/* ── Wallet ────────────────────────────────────────────────────────── */}
+      <div className="profile-card">
+        <p className="profile-card-label">Wallet</p>
+        <div className="profile-amounts">
+          <div className="profile-amount celo">
+            <span className="profile-amount-label">CELO</span>
+            <span className="profile-amount-value">
+              {celoBalance ? parseFloat(formatUnits(celoBalance.value, celoBalance.decimals)).toFixed(4) : '—'}
+            </span>
+          </div>
+          <div className="profile-amount gd">
+            <span className="profile-amount-label">GoodDollar</span>
+            <span className="profile-amount-value">
+              {gdBalance !== undefined ? `${parseFloat(formatUnits(gdBalance as bigint, 18)).toFixed(2)} G$` : '—'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* ── Stats ─────────────────────────────────────────────────────────── */}

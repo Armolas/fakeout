@@ -1213,6 +1213,8 @@ body {
 }
 .profile-amount.won  { background: #e8fff8; border-color: rgba(6, 214, 160, 0.4); }
 .profile-amount.lost { background: #fff0f3; border-color: rgba(239, 71, 111, 0.35); }
+.profile-amount.celo { background: #eff0ff; border-color: rgba(99, 102, 241, 0.35); }
+.profile-amount.gd   { background: var(--surface-mint); border-color: rgba(106, 171, 154, 0.4); }
 .profile-amount-label {
   font-size: 10px;
   font-weight: 800;
@@ -1226,6 +1228,8 @@ body {
 }
 .profile-amount.won  .profile-amount-value { color: #047857; }
 .profile-amount.lost .profile-amount-value { color: var(--danger); }
+.profile-amount.celo .profile-amount-value { color: #4f46e5; }
+.profile-amount.gd   .profile-amount-value { color: var(--text-mint); }
 
 .profile-disconnect {
   display: flex;
@@ -2116,8 +2120,10 @@ body {
 .profile-card {
   animation: fade-up 0.45s cubic-bezier(0.34, 1.3, 0.64, 1) both;
 }
-.profile-card:nth-of-type(1) { animation-delay: 0.1s; }
-.profile-card:nth-of-type(2) { animation-delay: 0.18s; }
+.profile-card:nth-of-type(1) { animation-delay: 0.08s; }
+.profile-card:nth-of-type(2) { animation-delay: 0.16s; }
+.profile-card:nth-of-type(3) { animation-delay: 0.24s; }
+.profile-card:nth-of-type(4) { animation-delay: 0.32s; }
 
 .profile-screen .ubi-banner {
   width: 100%;
