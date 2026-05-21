@@ -1,0 +1,9 @@
+{
+  "network": "celo",
+  "contractAddress": "0x4b33788935FEEDe1335aCa7355f377816aFFD95B",
+  "goodDollarAddress": "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
+  "treasuryAddress": "0x744cDf77b3bb55aDb00D608d9EE35C8B43d4b0C8",
+  "deployer": "0x744cDf77b3bb55aDb00D608d9EE35C8B43d4b0C8",
+  "deployedAt": "2026-05-21T14:51:40.024Z",
+  "txHash": "0x136198d918bb9ec0bc425cb2d20c64b99b956f0df5850cc56caff325945b5e51"
+}

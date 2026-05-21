@@ -46,7 +46,6 @@ export const gamePlayers = pgTable('game_players', {
   gameId:          uuid('game_id').references(() => games.id, { onDelete: 'cascade' }),
   playerId:        uuid('player_id').references(() => players.id),
   role:            varchar('role', { length: 10 }),
-  isFirstGame:     boolean('is_first_game').default(false),
   hasSubmittedClue: boolean('has_submitted_clue').default(false),
   isEliminated:    boolean('is_eliminated').default(false),
   joinedAt:        timestamp('joined_at').defaultNow(),

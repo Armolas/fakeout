@@ -48,7 +48,6 @@ export interface GamePlayer {
   walletAddress: string
   displayName: string
   role: 'crewmate' | 'impostor'
-  isFirstGame: boolean
   hasSubmittedClue: boolean
   isEliminated: boolean
   socketId: string

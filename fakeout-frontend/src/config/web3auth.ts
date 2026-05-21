@@ -3,13 +3,16 @@ import { AuthAdapter } from '@web3auth/auth-adapter'
 import { EthereumPrivateKeyProvider } from '@web3auth/ethereum-provider'
 import { CHAIN_NAMESPACES, UX_MODE, WEB3AUTH_NETWORK } from '@web3auth/base'
 import { Web3AuthConnector } from '@web3auth/web3auth-wagmi-connector'
-import { celoSepolia } from 'wagmi/chains'
+import { celo, celoSepolia } from 'wagmi/chains'
+
+const isMainnet = import.meta.env.VITE_MAINNET === 'true'
+const gameChain = isMainnet ? celo : celoSepolia
 
 const chainConfig = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
-  chainId: '0x' + celoSepolia.id.toString(16),
-  rpcTarget: 'https://forno.celo-sepolia.celo-testnet.org',
-  displayName: 'Celo Sepolia',
+  chainId: '0x' + gameChain.id.toString(16),
+  rpcTarget: isMainnet ? 'https://forno.celo.org' : 'https://forno.celo-sepolia.celo-testnet.org',
+  displayName: isMainnet ? 'Celo' : 'Celo Sepolia',
   ticker: 'CELO',
   tickerName: 'Celo',
 }
@@ -22,7 +25,7 @@ function createWeb3Auth() {
 
   const instance = new Web3AuthNoModal({
     clientId,
-    web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+    web3AuthNetwork: isMainnet ? WEB3AUTH_NETWORK.SAPPHIRE_MAINNET : WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
     privateKeyProvider,
   })
 

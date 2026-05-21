@@ -3,12 +3,10 @@ import { eq, and, sql } from 'drizzle-orm'
 import {
   Game,
   GamePlayer,
-  GameStatus,
   GameType,
-  ClueRound,
-  VoteRound,
   GameResolution,
 } from '../types'
+import { contractService } from '../services/contractService'
 import { selectWord } from '../services/wordService'
 import { db } from '../db'
 import {
@@ -79,11 +77,10 @@ export const GameManager = {
       playerId,
       walletAddress: params.walletAddress.toLowerCase(),
       displayName: params.displayName,
-      role: 'crewmate',     // role assigned at game start
-      isFirstGame: false,   // checked at join time
+      role: 'crewmate',
       hasSubmittedClue: false,
       isEliminated: false,
-      socketId: '',         // set when socket connects
+      socketId: '',
     }
 
     const game: Game = {
@@ -108,6 +105,11 @@ export const GameManager = {
 
     activeGames.set(roomCode, game)
     playerGameMap.set(params.walletAddress.toLowerCase(), roomCode)
+
+    // Register on-chain (staked games only — free games need no contract)
+    if (BigInt(params.stakeAmount) > 0n) {
+      contractService.createGame(gameId, params.stakeAmount)
+    }
 
     // Persist skeleton to DB
     await db.insert(gamesTable).values({
@@ -158,22 +160,25 @@ export const GameManager = {
       })
 
     const [playerRow] = await db
-      .select({ id: playersTable.id, gamesPlayed: playersTable.gamesPlayed })
+      .select({ id: playersTable.id })
       .from(playersTable)
       .where(eq(playersTable.walletAddress, params.walletAddress.toLowerCase()))
-    const { id: playerId, gamesPlayed: games_played } = playerRow
+    const { id: playerId } = playerRow
 
     // Check if already in game
     if (game.players[playerId]) throw new Error('ALREADY_IN_GAME')
 
-    const isFirstGame = games_played === 0
+    // Pull stake on-chain before adding player to state.
+    // Throws if player hasn't approved enough G$ — join is rejected.
+    if (BigInt(game.stakeAmount) > 0n) {
+      await contractService.joinGame(game.id, params.walletAddress.toLowerCase())
+    }
 
     const newPlayer: GamePlayer = {
       playerId,
       walletAddress: params.walletAddress.toLowerCase(),
       displayName: params.displayName,
       role: 'crewmate',
-      isFirstGame,
       hasSubmittedClue: false,
       isEliminated: false,
       socketId: '',
@@ -183,7 +188,7 @@ export const GameManager = {
     playerGameMap.set(params.walletAddress.toLowerCase(), game.roomCode)
 
     await db.insert(gamePlayersTable)
-      .values({ gameId: game.id, playerId, isFirstGame })
+      .values({ gameId: game.id, playerId })
       .onConflictDoNothing()
 
     return game
@@ -224,6 +229,11 @@ export const GameManager = {
     game.status = 'active'
     game.currentRound = 1
     game.clues = [{ roundNumber: 1, clues: [] }]
+
+    // Lock the game on-chain (staked games only)
+    if (BigInt(game.stakeAmount) > 0n) {
+      contractService.startGame(game.id)
+    }
 
     // Persist to DB
     await db.update(gamesTable)
@@ -517,8 +527,16 @@ export const GameManager = {
     delete game.players[player.playerId]
     playerGameMap.delete(walletAddress.toLowerCase())
 
-    // If lobby is now empty, remove it entirely
+    // Refund stake on-chain if this was a paid game
+    if (BigInt(game.stakeAmount) > 0n) {
+      contractService.removePlayer(game.id, walletAddress.toLowerCase())
+    }
+
+    // If lobby is now empty, close out on-chain and remove it entirely
     if (Object.keys(game.players).length === 0) {
+      if (BigInt(game.stakeAmount) > 0n) {
+        contractService.cancelGame(game.id)
+      }
       activeGames.delete(roomCode.toUpperCase())
       return { game: null, wasHost }
     }

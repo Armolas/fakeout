@@ -10,9 +10,9 @@ dotenv.config()
 // Override any entry via GOOD_DOLLAR_ADDRESS in .env.
 const GOOD_DOLLAR_ADDRESSES: Record<string, string> = {
   hardhat: '',
-  alfajores: '0x62b8B11039fCFE5AB0c56e502B1C372A3d372190',
+  alfajores: '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A',
   'celo-sepolia': '', // G$ not yet on Celo Sepolia — MockERC20 deployed automatically
-  celo: '0x62b8B11039fCFE5AB0c56e502B1C372A3d372190',
+  celo: '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A',
 }
 
 async function main() {

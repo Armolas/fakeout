@@ -42,16 +42,11 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     // gameId (bytes32 from backend uuid) → Game
     mapping(bytes32 => Game) private games;
 
-    // wallet → has ever played (first game free)
-    mapping(address => bool) public hasPlayedBefore;
-
-    // gameId → player → paid stake (used for refunds on cancellation)
-    mapping(bytes32 => mapping(address => bool)) private playerPaid;
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
     event GameCreated(bytes32 indexed gameId, uint256 stakeAmount);
-    event PlayerJoined(bytes32 indexed gameId, address indexed player, bool wasSubsidized);
+    event PlayerJoined(bytes32 indexed gameId, address indexed player);
     event GameStarted(bytes32 indexed gameId, uint256 pot);
     event GameCompleted(
         bytes32 indexed gameId,
@@ -59,7 +54,6 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         uint256 perWinnerAmount,
         uint256 feeCollected
     );
-    event PotToppedUp(bytes32 indexed gameId, uint256 amount);
     event TreasuryUpdated(address indexed newTreasury);
     event ProtocolFeeUpdated(uint256 newFeeBps);
 
@@ -78,6 +72,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error TransferFailed();
     error WinnerNotAPlayer();
+    error PlayerNotInGame();
 
     // ─── Constructor ──────────────────────────────────────────────────────────
 
@@ -111,8 +106,8 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Player joins a game and stakes G$.
-     *         First-time players are subsidized — no stake required.
+     * @notice Player joins a game and stakes G$ (if stakeAmount > 0).
+     *         For free games (stakeAmount = 0) no token transfer occurs.
      *         Backend calls this on behalf of the player after they approve the tx.
      * @param gameId  The game to join
      * @param player  The player's wallet address
@@ -132,21 +127,15 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
             if (game.players[i] == player) revert AlreadyJoined();
         }
 
-        bool subsidized = !hasPlayedBefore[player];
-
-        if (!subsidized) {
+        if (game.stakeAmount > 0) {
             // Pull stake from player — player must have approved contract first
             goodDollar.safeTransferFrom(player, address(this), game.stakeAmount);
             game.pot += game.stakeAmount;
-            playerPaid[gameId][player] = true;
-        } else {
-            // Mark as played — pot will be topped up by owner via topUpPot()
-            hasPlayedBefore[player] = true;
         }
 
         game.players.push(player);
 
-        emit PlayerJoined(gameId, player, subsidized);
+        emit PlayerJoined(gameId, player);
     }
 
     /**
@@ -227,24 +216,39 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     // ─── Owner Utilities ──────────────────────────────────────────────────────
 
     /**
-     * @notice Top up the pot for subsidized (first-game-free) players.
-     *         Owner sends G$ to cover players who didn't stake.
+     * @notice Remove a single player from an open lobby and refund their stake.
+     *         Called when a player leaves before the game starts.
+     * @param gameId  The open game
+     * @param player  The player to remove
      */
-    function topUpPot(
-        bytes32 gameId,
-        uint256 amount
-    ) external onlyOwner nonReentrant {
-        if (!games[gameId].exists) revert GameNotFound();
-        if (games[gameId].status == GameStatus.Completed) revert GameAlreadyCompleted();
+    function removePlayer(bytes32 gameId, address player) external onlyOwner nonReentrant {
+        Game storage game = games[gameId];
 
-        goodDollar.safeTransferFrom(msg.sender, address(this), amount);
-        games[gameId].pot += amount;
+        if (!game.exists) revert GameNotFound();
+        if (game.status != GameStatus.Open) revert GameNotOpen();
 
-        emit PotToppedUp(gameId, amount);
+        // Find and remove player by swapping with the last element then popping
+        uint256 len = game.players.length;
+        bool found = false;
+        for (uint256 i = 0; i < len; i++) {
+            if (game.players[i] == player) {
+                game.players[i] = game.players[len - 1];
+                game.players.pop();
+                found = true;
+                break;
+            }
+        }
+        if (!found) revert PlayerNotInGame();
+
+        // Refund stake if they paid
+        if (game.stakeAmount > 0) {
+            game.pot -= game.stakeAmount;
+            goodDollar.safeTransfer(player, game.stakeAmount);
+        }
     }
 
     /**
-     * @notice Cancel a game and refund stakes to paying players.
+     * @notice Cancel a game and refund stakes to all players.
      *         Use if the backend cannot complete the game after players have staked.
      * @param gameId  The game to cancel
      */
@@ -256,10 +260,9 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
 
         game.status = GameStatus.Completed;
 
-        for (uint256 i = 0; i < game.players.length; i++) {
-            address player = game.players[i];
-            if (playerPaid[gameId][player]) {
-                goodDollar.safeTransfer(player, game.stakeAmount);
+        if (game.stakeAmount > 0) {
+            for (uint256 i = 0; i < game.players.length; i++) {
+                goodDollar.safeTransfer(game.players[i], game.stakeAmount);
             }
         }
     }

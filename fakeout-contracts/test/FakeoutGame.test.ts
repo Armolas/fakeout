@@ -16,13 +16,11 @@ const STAKE = ethers.parseEther('1')   // 1 G$
 describe('FakeoutGame', () => {
   let fakeout: FakeoutGame
   let mockToken: any
-  let owner: HardhatEthersSigner
   let treasury: HardhatEthersSigner
   let players: HardhatEthersSigner[]
 
   beforeEach(async () => {
     const signers = await ethers.getSigners()
-    owner = signers[0]
     treasury = signers[1]
     players = signers.slice(2, 12)   // 10 players
 
@@ -79,64 +77,35 @@ describe('FakeoutGame', () => {
       await fakeout.createGame(gameId, STAKE)
     })
 
-    it('first game is free — no stake taken', async () => {
-      const player = players[0]
-      const balanceBefore = await mockToken.balanceOf(player.address)
-
-      await fakeout.joinGame(gameId, player.address)
-
-      const balanceAfter = await mockToken.balanceOf(player.address)
-      expect(balanceAfter).to.equal(balanceBefore) // no change
-      expect(await fakeout.hasPlayedBefore(player.address)).to.be.true
-    })
-
-    it('subsequent games require stake', async () => {
+    it('pulls stake from player on join', async () => {
       const player = players[0]
       const contractAddress = await fakeout.getAddress()
-
-      // First game free
-      await fakeout.joinGame(gameId, player.address)
-
-      // Second game
-      const gameId2 = toGameId('game-2b')
-      await fakeout.createGame(gameId2, STAKE)
-
-      // Approve and join
       await mockToken.connect(player).approve(contractAddress, STAKE)
       const balanceBefore = await mockToken.balanceOf(player.address)
 
-      await fakeout.joinGame(gameId2, player.address)
+      await fakeout.joinGame(gameId, player.address)
 
       const balanceAfter = await mockToken.balanceOf(player.address)
       expect(balanceBefore - balanceAfter).to.equal(STAKE)
     })
 
-    it('pot increases when player pays stake', async () => {
-      const gameId2 = toGameId('game-pot')
-      await fakeout.createGame(gameId2, STAKE)
-
-      // First player — free
-      await fakeout.joinGame(gameId2, players[0].address)
-
-      // Mark player[1] as having played before by joining another game first
-      const gameId3 = toGameId('game-pre')
-      await fakeout.createGame(gameId3, STAKE)
-      await fakeout.joinGame(gameId3, players[1].address)
-
-      // Now player[1] must stake
+    it('pot increases for each staking player', async () => {
       const contractAddress = await fakeout.getAddress()
-      await mockToken.connect(players[1]).approve(contractAddress, STAKE)
-      await fakeout.joinGame(gameId2, players[1].address)
-
-      const game = await fakeout.getGame(gameId2)
-      expect(game.pot).to.equal(STAKE)
+      for (let i = 0; i < 2; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+      const game = await fakeout.getGame(gameId)
+      expect(game.pot).to.equal(STAKE * 2n)
     })
 
     it('reverts if game is full (10 players)', async () => {
       const gameId = toGameId('game-full')
       await fakeout.createGame(gameId, STAKE)
+      const contractAddress = await fakeout.getAddress()
 
       for (let i = 0; i < 10; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
         await fakeout.joinGame(gameId, players[i].address)
       }
 
@@ -146,6 +115,8 @@ describe('FakeoutGame', () => {
     })
 
     it('reverts on duplicate join', async () => {
+      const contractAddress = await fakeout.getAddress()
+      await mockToken.connect(players[0]).approve(contractAddress, STAKE)
       await fakeout.joinGame(gameId, players[0].address)
       await expect(fakeout.joinGame(gameId, players[0].address))
         .to.be.revertedWithCustomError(fakeout, 'AlreadyJoined')
@@ -154,17 +125,20 @@ describe('FakeoutGame', () => {
 
   // ── startGame ───────────────────────────────────────────────────────────────
   describe('startGame', () => {
+    async function joinPlayers(gameId: string, count: number) {
+      const contractAddress = await fakeout.getAddress()
+      for (let i = 0; i < count; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+    }
+
     it('starts with 3+ players', async () => {
       const gameId = toGameId('game-start')
       await fakeout.createGame(gameId, STAKE)
+      await joinPlayers(gameId, 3)
 
-      for (let i = 0; i < 3; i++) {
-        await fakeout.joinGame(gameId, players[i].address)
-      }
-
-      await expect(fakeout.startGame(gameId))
-        .to.emit(fakeout, 'GameStarted')
-
+      await expect(fakeout.startGame(gameId)).to.emit(fakeout, 'GameStarted')
       const game = await fakeout.getGame(gameId)
       expect(game.status).to.equal(1) // Active
     })
@@ -172,8 +146,7 @@ describe('FakeoutGame', () => {
     it('reverts with fewer than 3 players', async () => {
       const gameId = toGameId('game-nostart')
       await fakeout.createGame(gameId, STAKE)
-      await fakeout.joinGame(gameId, players[0].address)
-      await fakeout.joinGame(gameId, players[1].address)
+      await joinPlayers(gameId, 2)
 
       await expect(fakeout.startGame(gameId))
         .to.be.revertedWithCustomError(fakeout, 'NotEnoughPlayers')
@@ -183,22 +156,16 @@ describe('FakeoutGame', () => {
   // ── distributeRewards ───────────────────────────────────────────────────────
   describe('distributeRewards', () => {
     let gameId: string
-    const contractAddress = { value: '' }
+    let contractAddress: string
 
     beforeEach(async () => {
       gameId = toGameId('game-rewards')
-      contractAddress.value = await fakeout.getAddress()
+      contractAddress = await fakeout.getAddress()
       await fakeout.createGame(gameId, STAKE)
 
-      // 3 players join — mark 2 as having played before so they stake
-      await fakeout.joinGame(gameId, players[0].address) // free
-
-      // Make players[1] and players[2] pay stake
-      for (let i = 1; i <= 2; i++) {
-        const preGame = toGameId(`pre-${i}`)
-        await fakeout.createGame(preGame, STAKE)
-        await fakeout.joinGame(preGame, players[i].address)
-        await mockToken.connect(players[i]).approve(contractAddress.value, STAKE)
+      // 3 players join and stake
+      for (let i = 0; i < 3; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
         await fakeout.joinGame(gameId, players[i].address)
       }
 
@@ -206,40 +173,32 @@ describe('FakeoutGame', () => {
     })
 
     it('distributes rewards correctly to single winner', async () => {
-      const winner = players[1]
+      const winner = players[0]
       const treasuryBefore = await mockToken.balanceOf(treasury.address)
       const winnerBefore = await mockToken.balanceOf(winner.address)
 
       await fakeout.distributeRewards(gameId, [winner.address])
 
-      const pot = STAKE * 2n  // 2 staking players
+      const pot = STAKE * 3n  // 3 staking players
       const fee = (pot * 500n) / 10000n
       const rewardPool = pot - fee
 
-      const treasuryAfter = await mockToken.balanceOf(treasury.address)
-      const winnerAfter = await mockToken.balanceOf(winner.address)
-
-      expect(treasuryAfter - treasuryBefore).to.equal(fee)
-      expect(winnerAfter - winnerBefore).to.equal(rewardPool)
+      expect(await mockToken.balanceOf(treasury.address) - treasuryBefore).to.equal(fee)
+      expect(await mockToken.balanceOf(winner.address) - winnerBefore).to.equal(rewardPool)
     })
 
     it('splits rewards equally among multiple winners', async () => {
-      const winners = [players[1].address, players[2].address]
-
+      const winners = [players[0].address, players[1].address]
       await fakeout.distributeRewards(gameId, winners)
 
-      const pot = STAKE * 2n
+      const pot = STAKE * 3n
       const fee = (pot * 500n) / 10000n
       const rewardPool = pot - fee
       const perWinner = rewardPool / 2n
 
-      const p1Balance = await mockToken.balanceOf(players[1].address)
-      const p2Balance = await mockToken.balanceOf(players[2].address)
-
-      // Both players staked 1 G$ and should receive perWinner back
-      // players[1] started with 10 G$, staked 1 G$, so now has 9 + perWinner
-      expect(p1Balance).to.equal(ethers.parseEther('9') + perWinner)
-      expect(p2Balance).to.equal(ethers.parseEther('9') + perWinner)
+      // Each winner started with 10 G$, staked 1 G$, so now has 9 + perWinner
+      expect(await mockToken.balanceOf(players[0].address)).to.equal(ethers.parseEther('9') + perWinner)
+      expect(await mockToken.balanceOf(players[1].address)).to.equal(ethers.parseEther('9') + perWinner)
     })
 
     it('marks game as completed', async () => {
@@ -255,27 +214,11 @@ describe('FakeoutGame', () => {
     })
   })
 
-  // ── topUpPot ────────────────────────────────────────────────────────────────
-  describe('topUpPot', () => {
-    it('allows owner to top up pot for subsidized players', async () => {
-      const gameId = toGameId('game-topup')
-      await fakeout.createGame(gameId, STAKE)
-
-      const contractAddress = await fakeout.getAddress()
-      await mockToken.approve(contractAddress, STAKE)
-      await fakeout.topUpPot(gameId, STAKE)
-
-      const game = await fakeout.getGame(gameId)
-      expect(game.pot).to.equal(STAKE)
-    })
-  })
-
   // ── free games (stakeAmount = 0) ─────────────────────────────────────────────
   describe('free games', () => {
     it('creates a free game with stakeAmount = 0', async () => {
       const gameId = toGameId('game-free')
       await fakeout.createGame(gameId, 0)
-
       const game = await fakeout.getGame(gameId)
       expect(game.stakeAmount).to.equal(0)
       expect(game.status).to.equal(0) // Open
@@ -284,27 +227,19 @@ describe('FakeoutGame', () => {
     it('players join free game without staking', async () => {
       const gameId = toGameId('game-free2')
       await fakeout.createGame(gameId, 0)
-
       for (let i = 0; i < 3; i++) {
         const balBefore = await mockToken.balanceOf(players[i].address)
         await fakeout.joinGame(gameId, players[i].address)
-        const balAfter = await mockToken.balanceOf(players[i].address)
-        expect(balAfter).to.equal(balBefore) // no stake taken
+        expect(await mockToken.balanceOf(players[i].address)).to.equal(balBefore)
       }
-
-      const game = await fakeout.getGame(gameId)
-      expect(game.pot).to.equal(0)
+      expect((await fakeout.getGame(gameId)).pot).to.equal(0)
     })
 
     it('free game completes with pot = 0, emits 0 fee and 0 per winner', async () => {
       const gameId = toGameId('game-free3')
       await fakeout.createGame(gameId, 0)
-
-      for (let i = 0; i < 3; i++) {
-        await fakeout.joinGame(gameId, players[i].address)
-      }
+      for (let i = 0; i < 3; i++) await fakeout.joinGame(gameId, players[i].address)
       await fakeout.startGame(gameId)
-
       await expect(fakeout.distributeRewards(gameId, [players[0].address]))
         .to.emit(fakeout, 'GameCompleted')
         .withArgs(gameId, [players[0].address], 0, 0)
@@ -315,13 +250,9 @@ describe('FakeoutGame', () => {
   describe('winner validation', () => {
     it('reverts distributeRewards when winner is not a player', async () => {
       const gameId = toGameId('game-badwinner')
+      const contractAddress = await fakeout.getAddress()
       await fakeout.createGame(gameId, STAKE)
-
       for (let i = 0; i < 3; i++) {
-        const preGame = toGameId(`pre-bw-${i}`)
-        await fakeout.createGame(preGame, STAKE)
-        await fakeout.joinGame(preGame, players[i].address)
-        const contractAddress = await fakeout.getAddress()
         await mockToken.connect(players[i]).approve(contractAddress, STAKE)
         await fakeout.joinGame(gameId, players[i].address)
       }
@@ -335,53 +266,106 @@ describe('FakeoutGame', () => {
 
   // ── cancelGame ────────────────────────────────────────────────────────────────
   describe('cancelGame', () => {
-    it('refunds staking players and skips subsidized players', async () => {
+    it('refunds all staking players', async () => {
       const gameId = toGameId('game-cancel')
       const contractAddress = await fakeout.getAddress()
       await fakeout.createGame(gameId, STAKE)
 
-      // players[0] joins free (subsidized)
-      await fakeout.joinGame(gameId, players[0].address)
+      for (let i = 0; i < 3; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
 
-      // players[1] pays stake
-      const preGame = toGameId('pre-cancel')
-      await fakeout.createGame(preGame, STAKE)
-      await fakeout.joinGame(preGame, players[1].address)
-      await mockToken.connect(players[1]).approve(contractAddress, STAKE)
-      await fakeout.joinGame(gameId, players[1].address)
-
-      // players[2] pays stake
-      const preGame2 = toGameId('pre-cancel2')
-      await fakeout.createGame(preGame2, STAKE)
-      await fakeout.joinGame(preGame2, players[2].address)
-      await mockToken.connect(players[2]).approve(contractAddress, STAKE)
-      await fakeout.joinGame(gameId, players[2].address)
-
-      const bal0Before = await mockToken.balanceOf(players[0].address)
-      const bal1Before = await mockToken.balanceOf(players[1].address)
-      const bal2Before = await mockToken.balanceOf(players[2].address)
-
+      const balsBefore = await Promise.all(players.slice(0, 3).map(p => mockToken.balanceOf(p.address)))
       await fakeout.cancelGame(gameId)
 
-      expect(await mockToken.balanceOf(players[0].address)).to.equal(bal0Before) // no refund
-      expect(await mockToken.balanceOf(players[1].address)).to.equal(bal1Before + STAKE)
-      expect(await mockToken.balanceOf(players[2].address)).to.equal(bal2Before + STAKE)
+      for (let i = 0; i < 3; i++) {
+        expect(await mockToken.balanceOf(players[i].address)).to.equal(balsBefore[i] + STAKE)
+      }
+      expect((await fakeout.getGame(gameId)).status).to.equal(2) // Completed
+    })
 
-      const game = await fakeout.getGame(gameId)
-      expect(game.status).to.equal(2) // Completed
+    it('cancel a free game marks it completed without transfers', async () => {
+      const gameId = toGameId('game-cancel-free')
+      await fakeout.createGame(gameId, 0)
+      for (let i = 0; i < 3; i++) await fakeout.joinGame(gameId, players[i].address)
+      await fakeout.cancelGame(gameId)
+      expect((await fakeout.getGame(gameId)).status).to.equal(2) // Completed
     })
 
     it('reverts cancelGame on a completed game', async () => {
       const gameId = toGameId('game-cancel2')
+      const contractAddress = await fakeout.getAddress()
       await fakeout.createGame(gameId, STAKE)
       for (let i = 0; i < 3; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
         await fakeout.joinGame(gameId, players[i].address)
       }
       await fakeout.startGame(gameId)
       await fakeout.distributeRewards(gameId, [players[0].address])
-
       await expect(fakeout.cancelGame(gameId))
         .to.be.revertedWithCustomError(fakeout, 'GameAlreadyCompleted')
+    })
+  })
+
+  // ── removePlayer ─────────────────────────────────────────────────────────────
+  describe('removePlayer', () => {
+    it('refunds stake and removes player from open staked game', async () => {
+      const gameId = toGameId('game-remove')
+      const contractAddress = await fakeout.getAddress()
+      await fakeout.createGame(gameId, STAKE)
+
+      for (let i = 0; i < 3; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+
+      const balBefore = await mockToken.balanceOf(players[1].address)
+      const potBefore = (await fakeout.getGame(gameId)).pot
+
+      await fakeout.removePlayer(gameId, players[1].address)
+
+      expect(await mockToken.balanceOf(players[1].address)).to.equal(balBefore + STAKE)
+      expect((await fakeout.getGame(gameId)).pot).to.equal(potBefore - STAKE)
+
+      const remainingPlayers = await fakeout.getGamePlayers(gameId)
+      expect(remainingPlayers).to.not.include(players[1].address)
+      expect(remainingPlayers.length).to.equal(2)
+    })
+
+    it('removes player from free game without any transfer', async () => {
+      const gameId = toGameId('game-remove-free')
+      await fakeout.createGame(gameId, 0)
+
+      for (let i = 0; i < 3; i++) await fakeout.joinGame(gameId, players[i].address)
+
+      const balBefore = await mockToken.balanceOf(players[0].address)
+      await fakeout.removePlayer(gameId, players[0].address)
+
+      expect(await mockToken.balanceOf(players[0].address)).to.equal(balBefore)
+      const remainingPlayers = await fakeout.getGamePlayers(gameId)
+      expect(remainingPlayers.length).to.equal(2)
+    })
+
+    it('reverts if player is not in the game', async () => {
+      const gameId = toGameId('game-remove-notfound')
+      await fakeout.createGame(gameId, STAKE)
+      await expect(fakeout.removePlayer(gameId, players[0].address))
+        .to.be.revertedWithCustomError(fakeout, 'PlayerNotInGame')
+    })
+
+    it('reverts if game is not Open', async () => {
+      const gameId = toGameId('game-remove-active')
+      const contractAddress = await fakeout.getAddress()
+      await fakeout.createGame(gameId, STAKE)
+      for (let i = 0; i < 3; i++) {
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+      await fakeout.startGame(gameId)
+
+      await expect(fakeout.removePlayer(gameId, players[0].address))
+        .to.be.revertedWithCustomError(fakeout, 'GameNotOpen')
     })
   })
 

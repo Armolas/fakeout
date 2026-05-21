@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io'
 import { GameManager } from '../game/GameManager'
+import { contractService } from '../services/contractService'
 import {
   CreateGamePayload,
   JoinGamePayload,
@@ -478,8 +479,10 @@ function handleVoteComplete(io: Server, roomCode: string) {
     return { walletAddress: p.walletAddress, displayName: p.displayName }
   })
 
-  // TODO: call smart contract distributeRewards() here
-  // contractService.distributeRewards(game.contractGameId, winResolution.winners)
+  // Distribute rewards on-chain (staked games only)
+  if (BigInt(game.stakeAmount) > 0n) {
+    contractService.distributeRewards(game.id, winResolution.winners)
+  }
 
   io.to(roomCode).emit('game:result', {
     outcome: winResolution.outcome,
