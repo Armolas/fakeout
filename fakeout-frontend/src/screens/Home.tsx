@@ -28,8 +28,6 @@ interface Props {
   onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) => void
   connectedWallet: string
   displayName: string
-  onDisplayNameChange: (name: string) => void
-  playerStats: { gamesPlayed: number; gamesWon: number; totalAmountWon: string; totalAmountLost: string } | null
   onOpenProfile: () => void
   error: string | null
   clearError: () => void
@@ -41,8 +39,6 @@ export function Home({
   onJoinGame,
   onCreateGame,
   displayName,
-  onDisplayNameChange,
-  playerStats,
   onOpenProfile,
   error,
   clearError,
@@ -204,40 +200,6 @@ export function Home({
             {displayName?.[0]?.toUpperCase() ?? '?'}
           </button>
         </div>
-      </div>
-
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      {playerStats && playerStats.gamesPlayed > 0 && (
-        <div className="stats-bar">
-          <div className="stat-chip">
-            <span className="stat-chip-value">{playerStats.gamesPlayed}</span>
-            <span className="stat-chip-label">Played</span>
-          </div>
-          <div className="stat-divider" />
-          <div className="stat-chip">
-            <span className="stat-chip-value">{playerStats.gamesWon}</span>
-            <span className="stat-chip-label">Won</span>
-          </div>
-          <div className="stat-divider" />
-          <div className="stat-chip">
-            <span className="stat-chip-value">
-              {Math.round((playerStats.gamesWon / playerStats.gamesPlayed) * 100)}%
-            </span>
-            <span className="stat-chip-label">Win rate</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Name input ─────────────────────────────────────────────────────── */}
-      <div className="name-field">
-        <label className="name-label">Your name</label>
-        <input
-          className="input name-input"
-          placeholder="What should we call you?"
-          value={displayName}
-          maxLength={20}
-          onChange={e => onDisplayNameChange(e.target.value)}
-        />
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}

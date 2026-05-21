@@ -166,8 +166,6 @@ export default function App() {
         onJoinGame={handleJoinGame}
         connectedWallet={walletAddress}
         displayName={displayName}
-        onDisplayNameChange={setDisplayName}
-        playerStats={playerStats}
         onOpenProfile={() => setShowProfile(true)}
         error={game.error}
         clearError={game.clearError}
