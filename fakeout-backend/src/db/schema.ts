@@ -14,9 +14,11 @@ export const players = pgTable('players', {
   id:           uuid('id').primaryKey().defaultRandom(),
   walletAddress: varchar('wallet_address', { length: 42 }).unique().notNull(),
   displayName:  varchar('display_name', { length: 50 }).notNull(),
-  gamesPlayed:  integer('games_played').notNull().default(0),
-  gamesWon:     integer('games_won').notNull().default(0),
-  createdAt:    timestamp('created_at').defaultNow(),
+  gamesPlayed:     integer('games_played').notNull().default(0),
+  gamesWon:        integer('games_won').notNull().default(0),
+  totalAmountWon:  varchar('total_amount_won',  { length: 78 }).notNull().default('0'),
+  totalAmountLost: varchar('total_amount_lost', { length: 78 }).notNull().default('0'),
+  createdAt:       timestamp('created_at').defaultNow(),
 })
 
 export const games = pgTable('games', {

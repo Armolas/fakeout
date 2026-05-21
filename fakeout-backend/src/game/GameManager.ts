@@ -451,6 +451,10 @@ export const GameManager = {
 
     // Update player stats
     const playerList = Object.values(game.players)
+    const stakeWei = BigInt(game.stakeAmount)
+    const perWinnerWei = resolution.winners.length > 0
+      ? BigInt(game.potAmount) / BigInt(resolution.winners.length)
+      : 0n
     for (const player of playerList) {
       const isWinner = resolution.winners.includes(player.walletAddress)
       await db.update(playersTable)
@@ -459,6 +463,12 @@ export const GameManager = {
           gamesWon: isWinner
             ? sql`${playersTable.gamesWon} + 1`
             : playersTable.gamesWon,
+          ...(stakeWei > 0n && isWinner && {
+            totalAmountWon: sql`(${playersTable.totalAmountWon})::numeric + ${perWinnerWei.toString()}`,
+          }),
+          ...(stakeWei > 0n && !isWinner && {
+            totalAmountLost: sql`(${playersTable.totalAmountLost})::numeric + ${stakeWei.toString()}`,
+          }),
         })
         .where(eq(playersTable.id, player.playerId))
     }

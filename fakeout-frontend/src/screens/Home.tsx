@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { useEffect, useState } from 'react'
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useConnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { formatUnits } from 'viem'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
@@ -29,7 +29,8 @@ interface Props {
   connectedWallet: string
   displayName: string
   onDisplayNameChange: (name: string) => void
-  playerStats: { gamesPlayed: number; gamesWon: number } | null
+  playerStats: { gamesPlayed: number; gamesWon: number; totalAmountWon: string; totalAmountLost: string } | null
+  onOpenProfile: () => void
   error: string | null
   clearError: () => void
 }
@@ -42,12 +43,12 @@ export function Home({
   displayName,
   onDisplayNameChange,
   playerStats,
+  onOpenProfile,
   error,
   clearError,
 }: Props) {
   const { address, isConnected } = useAccount()
   const { connect, isPending: isConnecting } = useConnect()
-  const { disconnect } = useDisconnect()
 
   const [tab, setTab] = useState<Tab>('join')
   const [roomCode, setRoomCode] = useState('')
@@ -199,8 +200,8 @@ export function Home({
               {parseFloat(formatUnits(balance as bigint, 18)).toFixed(2)} G$
             </span>
           )}
-          <button className="wallet-chip" onClick={() => disconnect()}>
-            {shortenAddress(address ?? '')}
+          <button className="avatar-btn" onClick={onOpenProfile} title="View profile">
+            {displayName?.[0]?.toUpperCase() ?? '?'}
           </button>
         </div>
       </div>
@@ -461,10 +462,6 @@ export function Home({
   )
 }
 
-function shortenAddress(addr: string) {
-  if (!addr) return ''
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
 
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
