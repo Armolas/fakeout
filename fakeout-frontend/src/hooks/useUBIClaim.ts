@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { celo } from 'wagmi/chains'
 import { ClaimSDK, IdentitySDK } from '@goodsdks/citizen-sdk'
 
 const GD_ENV = (import.meta.env.VITE_GOODDOLLAR_ENV ?? 'production') as 'production' | 'staging' | 'development'
 
 export function useUBIClaim() {
   const { address } = useAccount()
-  const publicClient = usePublicClient()
-  const { data: walletClient } = useWalletClient()
+  // Use Celo mainnet clients — GoodDollar UBI only runs on Celo mainnet (42220)
+  const publicClient = usePublicClient({ chainId: celo.id })
+  const { data: walletClient } = useWalletClient({ chainId: celo.id })
 
   const [entitlement, setEntitlement] = useState<bigint>(0n)
   const [nextClaimTime, setNextClaimTime] = useState<Date | null>(null)
