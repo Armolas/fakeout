@@ -38,11 +38,15 @@ function createWeb3Auth() {
 
 export const web3AuthInstance = createWeb3Auth()
 
-export const emailConnector = web3AuthInstance
-  ? Web3AuthConnector({
-      web3AuthInstance,
-      loginParams: { loginProvider: 'email_passwordless' },
-      id: 'web3auth-email',
-      name: 'Email',
-    })
-  : null
+export function makeEmailConnector(email: string) {
+  if (!web3AuthInstance) return null
+  return Web3AuthConnector({
+    web3AuthInstance,
+    loginParams: {
+      loginProvider: 'email_passwordless',
+      extraLoginOptions: { login_hint: email },
+    },
+    id: 'web3auth-email',
+    name: 'Email',
+  })
+}

@@ -5,8 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useConnectors, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatUnits } from 'viem'
-import { WALLET_ADAPTERS } from '@web3auth/base'
-import { web3AuthInstance } from '../config/web3auth'
+import { makeEmailConnector } from '../config/web3auth'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { useUBIClaim } from '../hooks/useUBIClaim'
 import type { PublicLobby } from '../types'
@@ -59,14 +58,11 @@ export function Home({
     if (connector) connect({ connector })
   }
 
-  async function connectWithEmail() {
-    if (!loginEmail.trim() || !web3AuthInstance) return
-    const connector = connectors.find(c => c.id === 'web3auth-email')
+  function connectWithEmail() {
+    const email = loginEmail.trim()
+    if (!email) return
+    const connector = makeEmailConnector(email)
     if (!connector) return
-    await web3AuthInstance.connectTo(WALLET_ADAPTERS.AUTH, {
-      loginProvider: 'email_passwordless',
-      extraLoginOptions: { login_hint: loginEmail.trim() },
-    })
     connect({ connector })
   }
 
