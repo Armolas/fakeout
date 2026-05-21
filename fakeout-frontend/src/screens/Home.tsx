@@ -5,6 +5,7 @@ import { useAccount, useConnect, useReadContract, useWriteContract, useWaitForTr
 import { injected } from 'wagmi/connectors'
 import { formatUnits } from 'viem'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
+import { useUBIClaim } from '../hooks/useUBIClaim'
 import type { PublicLobby } from '../types'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3001'
@@ -45,6 +46,7 @@ export function Home({
 }: Props) {
   const { address, isConnected } = useAccount()
   const { connect, isPending: isConnecting } = useConnect()
+  const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
 
   const [tab, setTab] = useState<Tab>('join')
   const [roomCode, setRoomCode] = useState('')
@@ -201,6 +203,35 @@ export function Home({
           </button>
         </div>
       </div>
+
+      {isConnected && entitlement > 0n && (
+        <div className="ubi-banner ubi-banner--ready">
+          <div className="ubi-info">
+            <span className="ubi-icon">🎁</span>
+            <div>
+              <p className="ubi-title">Daily G$ available</p>
+              <p className="ubi-amount">{parseFloat(formatUnits(entitlement, 18)).toFixed(2)} G$</p>
+            </div>
+          </div>
+          <button className="btn btn-accent btn-sm" onClick={claim} disabled={isClaiming}>
+            {isClaiming ? <><span className="btn-spinner" />Claiming…</> : 'Claim'}
+          </button>
+        </div>
+      )}
+
+      {isConnected && claimSuccess && entitlement === 0n && nextClaimTime && (
+        <div className="ubi-banner ubi-banner--claimed">
+          <span className="ubi-icon">✓</span>
+          <p className="ubi-claimed-text">G$ claimed! Next in {hoursUntil(nextClaimTime)}</p>
+        </div>
+      )}
+
+      {isConnected && !claimSuccess && entitlement === 0n && nextClaimTime && (
+        <div className="ubi-banner ubi-banner--waiting">
+          <span className="ubi-icon">⏳</span>
+          <p className="ubi-claimed-text">Next G$ claim in {hoursUntil(nextClaimTime)}</p>
+        </div>
+      )}
 
       {error && (
         <div className="error-banner" onClick={clearError}>
@@ -426,6 +457,14 @@ export function Home({
   )
 }
 
+
+function hoursUntil(date: Date): string {
+  const diff = date.getTime() - Date.now()
+  if (diff <= 0) return 'soon'
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
 
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
