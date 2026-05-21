@@ -31,6 +31,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     }
 
     struct Game {
+        bool exists;
         uint256 stakeAmount;
         uint256 pot;
         GameStatus status;
@@ -43,6 +44,9 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
 
     // wallet → has ever played (first game free)
     mapping(address => bool) public hasPlayedBefore;
+
+    // gameId → player → paid stake (used for refunds on cancellation)
+    mapping(bytes32 => mapping(address => bool)) private playerPaid;
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -73,6 +77,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     error FeeTooHigh();
     error ZeroAddress();
     error TransferFailed();
+    error WinnerNotAPlayer();
 
     // ─── Constructor ──────────────────────────────────────────────────────────
 
@@ -96,8 +101,9 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         bytes32 gameId,
         uint256 stakeAmount
     ) external onlyOwner {
-        if (games[gameId].stakeAmount != 0) revert GameAlreadyExists();
+        if (games[gameId].exists) revert GameAlreadyExists();
 
+        games[gameId].exists = true;
         games[gameId].stakeAmount = stakeAmount;
         games[gameId].status = GameStatus.Open;
 
@@ -117,7 +123,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     ) external onlyOwner nonReentrant {
         Game storage game = games[gameId];
 
-        if (game.stakeAmount == 0) revert GameNotFound();
+        if (!game.exists) revert GameNotFound();
         if (game.status != GameStatus.Open) revert GameNotOpen();
         if (game.players.length >= 10) revert GameFull();
 
@@ -132,6 +138,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
             // Pull stake from player — player must have approved contract first
             goodDollar.safeTransferFrom(player, address(this), game.stakeAmount);
             game.pot += game.stakeAmount;
+            playerPaid[gameId][player] = true;
         } else {
             // Mark as played — pot will be topped up by owner via topUpPot()
             hasPlayedBefore[player] = true;
@@ -149,7 +156,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     function startGame(bytes32 gameId) external onlyOwner {
         Game storage game = games[gameId];
 
-        if (game.stakeAmount == 0) revert GameNotFound();
+        if (!game.exists) revert GameNotFound();
         if (game.status != GameStatus.Open) revert GameNotOpen();
         if (game.players.length < 3) revert NotEnoughPlayers();
 
@@ -170,9 +177,18 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     ) external onlyOwner nonReentrant {
         Game storage game = games[gameId];
 
-        if (game.stakeAmount == 0) revert GameNotFound();
+        if (!game.exists) revert GameNotFound();
         if (game.status != GameStatus.Active) revert GameNotActive();
         if (winners.length == 0) revert NoWinners();
+
+        // Validate every winner was an actual player in this game
+        for (uint256 i = 0; i < winners.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < game.players.length; j++) {
+                if (game.players[j] == winners[i]) { found = true; break; }
+            }
+            if (!found) revert WinnerNotAPlayer();
+        }
 
         game.status = GameStatus.Completed;
         game.winners = winners;
@@ -218,7 +234,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         bytes32 gameId,
         uint256 amount
     ) external onlyOwner nonReentrant {
-        if (games[gameId].stakeAmount == 0) revert GameNotFound();
+        if (!games[gameId].exists) revert GameNotFound();
         if (games[gameId].status == GameStatus.Completed) revert GameAlreadyCompleted();
 
         goodDollar.safeTransferFrom(msg.sender, address(this), amount);
@@ -228,12 +244,42 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Cancel a game and refund stakes to paying players.
+     *         Use if the backend cannot complete the game after players have staked.
+     * @param gameId  The game to cancel
+     */
+    function cancelGame(bytes32 gameId) external onlyOwner nonReentrant {
+        Game storage game = games[gameId];
+
+        if (!game.exists) revert GameNotFound();
+        if (game.status == GameStatus.Completed) revert GameAlreadyCompleted();
+
+        game.status = GameStatus.Completed;
+
+        for (uint256 i = 0; i < game.players.length; i++) {
+            address player = game.players[i];
+            if (playerPaid[gameId][player]) {
+                goodDollar.safeTransfer(player, game.stakeAmount);
+            }
+        }
+    }
+
+    /**
      * @notice Update the treasury address
      */
     function setTreasury(address newTreasury) external onlyOwner {
         if (newTreasury == address(0)) revert ZeroAddress();
         treasury = newTreasury;
         emit TreasuryUpdated(newTreasury);
+    }
+
+    /**
+     * @notice Recover tokens accidentally sent to this contract.
+     * @dev    Owner is responsible for not over-withdrawing from active game pots.
+     */
+    function rescueTokens(address token, address to, uint256 amount) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        IERC20(token).safeTransfer(to, amount);
     }
 
     /**

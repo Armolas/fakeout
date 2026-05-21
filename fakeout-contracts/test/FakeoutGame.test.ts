@@ -270,6 +270,121 @@ describe('FakeoutGame', () => {
     })
   })
 
+  // ── free games (stakeAmount = 0) ─────────────────────────────────────────────
+  describe('free games', () => {
+    it('creates a free game with stakeAmount = 0', async () => {
+      const gameId = toGameId('game-free')
+      await fakeout.createGame(gameId, 0)
+
+      const game = await fakeout.getGame(gameId)
+      expect(game.stakeAmount).to.equal(0)
+      expect(game.status).to.equal(0) // Open
+    })
+
+    it('players join free game without staking', async () => {
+      const gameId = toGameId('game-free2')
+      await fakeout.createGame(gameId, 0)
+
+      for (let i = 0; i < 3; i++) {
+        const balBefore = await mockToken.balanceOf(players[i].address)
+        await fakeout.joinGame(gameId, players[i].address)
+        const balAfter = await mockToken.balanceOf(players[i].address)
+        expect(balAfter).to.equal(balBefore) // no stake taken
+      }
+
+      const game = await fakeout.getGame(gameId)
+      expect(game.pot).to.equal(0)
+    })
+
+    it('free game completes with pot = 0, emits 0 fee and 0 per winner', async () => {
+      const gameId = toGameId('game-free3')
+      await fakeout.createGame(gameId, 0)
+
+      for (let i = 0; i < 3; i++) {
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+      await fakeout.startGame(gameId)
+
+      await expect(fakeout.distributeRewards(gameId, [players[0].address]))
+        .to.emit(fakeout, 'GameCompleted')
+        .withArgs(gameId, [players[0].address], 0, 0)
+    })
+  })
+
+  // ── winner validation ────────────────────────────────────────────────────────
+  describe('winner validation', () => {
+    it('reverts distributeRewards when winner is not a player', async () => {
+      const gameId = toGameId('game-badwinner')
+      await fakeout.createGame(gameId, STAKE)
+
+      for (let i = 0; i < 3; i++) {
+        const preGame = toGameId(`pre-bw-${i}`)
+        await fakeout.createGame(preGame, STAKE)
+        await fakeout.joinGame(preGame, players[i].address)
+        const contractAddress = await fakeout.getAddress()
+        await mockToken.connect(players[i]).approve(contractAddress, STAKE)
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+      await fakeout.startGame(gameId)
+
+      const outsider = (await ethers.getSigners())[12]
+      await expect(fakeout.distributeRewards(gameId, [outsider.address]))
+        .to.be.revertedWithCustomError(fakeout, 'WinnerNotAPlayer')
+    })
+  })
+
+  // ── cancelGame ────────────────────────────────────────────────────────────────
+  describe('cancelGame', () => {
+    it('refunds staking players and skips subsidized players', async () => {
+      const gameId = toGameId('game-cancel')
+      const contractAddress = await fakeout.getAddress()
+      await fakeout.createGame(gameId, STAKE)
+
+      // players[0] joins free (subsidized)
+      await fakeout.joinGame(gameId, players[0].address)
+
+      // players[1] pays stake
+      const preGame = toGameId('pre-cancel')
+      await fakeout.createGame(preGame, STAKE)
+      await fakeout.joinGame(preGame, players[1].address)
+      await mockToken.connect(players[1]).approve(contractAddress, STAKE)
+      await fakeout.joinGame(gameId, players[1].address)
+
+      // players[2] pays stake
+      const preGame2 = toGameId('pre-cancel2')
+      await fakeout.createGame(preGame2, STAKE)
+      await fakeout.joinGame(preGame2, players[2].address)
+      await mockToken.connect(players[2]).approve(contractAddress, STAKE)
+      await fakeout.joinGame(gameId, players[2].address)
+
+      const bal0Before = await mockToken.balanceOf(players[0].address)
+      const bal1Before = await mockToken.balanceOf(players[1].address)
+      const bal2Before = await mockToken.balanceOf(players[2].address)
+
+      await fakeout.cancelGame(gameId)
+
+      expect(await mockToken.balanceOf(players[0].address)).to.equal(bal0Before) // no refund
+      expect(await mockToken.balanceOf(players[1].address)).to.equal(bal1Before + STAKE)
+      expect(await mockToken.balanceOf(players[2].address)).to.equal(bal2Before + STAKE)
+
+      const game = await fakeout.getGame(gameId)
+      expect(game.status).to.equal(2) // Completed
+    })
+
+    it('reverts cancelGame on a completed game', async () => {
+      const gameId = toGameId('game-cancel2')
+      await fakeout.createGame(gameId, STAKE)
+      for (let i = 0; i < 3; i++) {
+        await fakeout.joinGame(gameId, players[i].address)
+      }
+      await fakeout.startGame(gameId)
+      await fakeout.distributeRewards(gameId, [players[0].address])
+
+      await expect(fakeout.cancelGame(gameId))
+        .to.be.revertedWithCustomError(fakeout, 'GameAlreadyCompleted')
+    })
+  })
+
   // ── admin ───────────────────────────────────────────────────────────────────
   describe('admin', () => {
     it('updates protocol fee', async () => {
