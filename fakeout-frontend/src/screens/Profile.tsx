@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatUnits } from 'viem'
+import { useUBIClaim } from '../hooks/useUBIClaim'
 
 type PlayerStats = {
   gamesPlayed: number
@@ -17,10 +18,19 @@ interface Props {
   onDisconnect: () => void
 }
 
+function hoursUntil(date: Date): string {
+  const diff = date.getTime() - Date.now()
+  if (diff <= 0) return 'soon'
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
 export function Profile({ walletAddress, displayName, playerStats, onEditName, onBack, onDisconnect }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
+  const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
 
   function saveEdit() {
     const trimmed = editValue.trim()
@@ -135,6 +145,35 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
           </>
         )}
       </div>
+
+      {/* ── UBI Claim ─────────────────────────────────────────────────────── */}
+      {entitlement > 0n && (
+        <div className="profile-card">
+          <p className="profile-card-label">Daily G$</p>
+          <div className="profile-ubi-row">
+            <div>
+              <p className="profile-ubi-amount">{parseFloat(formatUnits(entitlement, 18)).toFixed(2)} G$ available</p>
+            </div>
+            <button className="btn btn-accent btn-sm" onClick={claim} disabled={isClaiming}>
+              {isClaiming ? <><span className="btn-spinner" />Claiming…</> : 'Claim'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {claimSuccess && entitlement === 0n && nextClaimTime && (
+        <div className="profile-card">
+          <p className="profile-card-label">Daily G$</p>
+          <p className="profile-ubi-next">Claimed! Next in {hoursUntil(nextClaimTime)}</p>
+        </div>
+      )}
+
+      {!claimSuccess && entitlement === 0n && nextClaimTime && (
+        <div className="profile-card">
+          <p className="profile-card-label">Daily G$</p>
+          <p className="profile-ubi-next">Next claim in {hoursUntil(nextClaimTime)}</p>
+        </div>
+      )}
 
       {/* ── Account ───────────────────────────────────────────────────────── */}
       <div className="profile-card">

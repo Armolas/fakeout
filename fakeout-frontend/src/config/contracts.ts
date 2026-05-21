@@ -2,7 +2,7 @@ export const FAKEOUT_CONTRACT_ADDRESS =
   (import.meta.env.VITE_CONTRACT_ADDRESS ?? '0x0000000000000000000000000000000000000000') as `0x${string}`
 
 export const GOOD_DOLLAR_ADDRESS =
-  (import.meta.env.VITE_GOOD_DOLLAR_ADDRESS ?? '0x62B8B11039FcfE5aB0C56E502b1C372A3d462a4f') as `0x${string}`
+  (import.meta.env.VITE_GOOD_DOLLAR_ADDRESS ?? '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A') as `0x${string}`
 
 export const ERC20_ABI = [
   {

@@ -61,7 +61,7 @@ export function useUBIClaim() {
   }, [buildSDK, entitlement])
 
   useEffect(() => {
-    if (address && walletClient?.account) checkEntitlement()
+    if (address) checkEntitlement()
   }, [address, walletClient]) // eslint-disable-line
 
   return { entitlement, nextClaimTime, isChecking, isClaiming, claimError, claimSuccess, claim }
