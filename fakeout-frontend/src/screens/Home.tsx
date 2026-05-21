@@ -202,22 +202,6 @@ export function Home({
         </div>
       </div>
 
-      {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className="home-tabs">
-        {(['join', 'create', 'browse'] as Tab[]).map(t => (
-          <button
-            key={t}
-            className={`home-tab ${tab === t ? 'active' : ''}`}
-            onClick={() => { setTab(t); clearError() }}
-          >
-            <span className="home-tab-icon">
-              {t === 'join' ? '🎯' : t === 'create' ? '✨' : '🌐'}
-            </span>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
-
       {error && (
         <div className="error-banner" onClick={clearError}>
           {friendlyError(error)}
@@ -263,7 +247,7 @@ export function Home({
             )}
 
             {!displayName.trim() && (
-              <p className="name-nudge">Enter your name above to play</p>
+              <p className="name-nudge">Set a name in your profile to play</p>
             )}
           </div>
         </div>
@@ -349,7 +333,7 @@ export function Home({
             )}
 
             {!displayName.trim() && (
-              <p className="name-nudge">Enter your name above to play</p>
+              <p className="name-nudge">Set a name in your profile to play</p>
             )}
           </div>
         </div>
@@ -420,6 +404,24 @@ export function Home({
           </div>
         </div>
       )}
+
+      {/* ── Bottom nav ─────────────────────────────────────────────────────── */}
+      <nav className="home-bottom-nav">
+        {(['join', 'create', 'browse'] as Tab[]).map(t => (
+          <button
+            key={t}
+            className={`home-nav-item ${tab === t ? 'active' : ''}`}
+            onClick={() => { setTab(t); clearError() }}
+          >
+            <span className="home-nav-icon">
+              {t === 'join' ? '🎯' : t === 'create' ? '✨' : '🌐'}
+            </span>
+            <span className="home-nav-label">
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

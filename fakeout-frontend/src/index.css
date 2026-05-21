@@ -321,6 +321,34 @@ body::before {
 .center     { text-align: center; }
 
 /* ─── Game Lobby ────────────────────────────────────────────────────────────── */
+.lobby-screen { gap: 14px; }
+
+.lobby-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lobby-section-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.lobby-players-section { display: flex; flex-direction: column; }
+
+.invite-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.3px;
+}
+
+/* legacy — kept for safety */
 .lobby-header {
   display: flex;
   align-items: center;
@@ -1143,7 +1171,10 @@ body::before {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─── Home screen ────────────────────────────────────────────────────────────── */
-.home-screen { gap: 16px; }
+.home-screen {
+  gap: 16px;
+  padding-bottom: 100px; /* space for floating bottom nav */
+}
 
 .home-header {
   display: flex;
@@ -1166,34 +1197,43 @@ body::before {
   flex-shrink: 0;
 }
 
-/* ─── Home tabs ──────────────────────────────────────────────────────────────── */
-.home-tabs {
+/* ─── Bottom nav ─────────────────────────────────────────────────────────────── */
+.home-bottom-nav {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 448px;
   display: flex;
-  gap: 4px;
   background: var(--surface);
   border-radius: var(--radius);
   padding: 5px;
+  gap: 4px;
+  z-index: 50;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
 }
-.home-tab {
+.home-nav-item {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 8px;
+  gap: 4px;
+  padding: 8px 4px;
   background: transparent;
-  color: var(--text-sub);
+  color: var(--muted);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
-  transition: all 0.18s ease;
+  letter-spacing: 0.3px;
+  transition: color 0.15s ease;
 }
-.home-tab-icon { font-size: 15px; line-height: 1; }
-.home-tab.active {
-  background: var(--surface2);
-  color: var(--text);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
+.home-nav-item:hover { color: var(--text-sub); }
+.home-nav-item.active { color: var(--primary-lt); }
+.home-nav-item.active .home-nav-icon { filter: drop-shadow(0 0 6px rgba(124,92,252,0.6)); }
+.home-nav-icon { font-size: 22px; line-height: 1; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
+.home-nav-item.active .home-nav-icon { transform: scale(1.15); }
+.home-nav-label { text-transform: uppercase; letter-spacing: 0.5px; }
 
 /* ─── Tab panels ─────────────────────────────────────────────────────────────── */
 .tab-panel {

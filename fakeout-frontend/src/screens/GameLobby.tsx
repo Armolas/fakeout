@@ -32,64 +32,62 @@ export function GameLobby({
     : 'Free to play'
 
   return (
-    <div className="screen">
-      {/* Header */}
-      <div className="lobby-header">
-        <button className="btn btn-ghost btn-sm" onClick={onLeave}>← Leave</button>
-        <div>
-          <span className="label">Room</span>
-          <span className="room-code">{roomCode}</span>
-        </div>
-      </div>
+    <div className="screen lobby-screen">
 
-      <div className="lobby-meta">
-        <span className="badge">{stakeLabel}</span>
-        <span className="badge">{players.length}/10 players</span>
-        <span className="badge">{discussionSeconds / 60} min discussion</span>
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <div className="lobby-topbar">
+        <button className="btn btn-ghost btn-sm" onClick={onLeave}>← Leave</button>
+        <div className="lobby-meta">
+          <span className="badge">{stakeLabel}</span>
+          <span className="badge">{players.length}/10</span>
+          <span className="badge">{discussionSeconds / 60}m</span>
+        </div>
       </div>
 
       {error && (
-        <div className="error-banner" onClick={clearError}>
-          {error}
-        </div>
+        <div className="error-banner" onClick={clearError}>{error}</div>
       )}
 
-      {/* Invite hint */}
-      {isHost && (
-        <div className="invite-box">
-          <p className="hint">Share this code with friends:</p>
-          <button
-            className="room-code-large"
-            onClick={() => navigator.clipboard?.writeText(roomCode)}
-            title="Tap to copy"
-          >
-            {roomCode}
-          </button>
-          <p className="hint-small">Tap to copy</p>
-        </div>
-      )}
-
-      {/* Player list */}
-      <div className="player-list">
-        <p className="label">Players</p>
-        {players.map(p => (
-          <div key={p.walletAddress} className="player-row">
-            <div className="player-avatar">{p.displayName[0]?.toUpperCase()}</div>
-            <div className="player-info">
-              <span className="player-name">{p.displayName}</span>
-              <span className="muted">{shortenAddress(p.walletAddress)}</span>
-            </div>
-            {p.isHost && <span className="host-badge">HOST</span>}
-          </div>
-        ))}
+      {/* ── Room code ─────────────────────────────────────────────────────── */}
+      <div className="invite-box">
+        <p className="invite-label">
+          {isHost ? 'Share this code with friends' : 'Room code'}
+        </p>
+        <button
+          className="room-code-large"
+          onClick={() => navigator.clipboard?.writeText(roomCode)}
+          title="Tap to copy"
+        >
+          {roomCode}
+        </button>
+        <p className="hint-small">Tap to copy</p>
       </div>
 
-      {/* Waiting / start */}
+      {/* ── Players ───────────────────────────────────────────────────────── */}
+      <div className="lobby-players-section">
+        <p className="lobby-section-label">Players · {players.length}/10</p>
+        <div className="player-list">
+          {players.map(p => (
+            <div key={p.walletAddress} className="player-row">
+              <div className="player-avatar">{p.displayName[0]?.toUpperCase()}</div>
+              <div className="player-info">
+                <span className="player-name">{p.displayName}</span>
+                <span className="muted">{shortenAddress(p.walletAddress)}</span>
+              </div>
+              {p.isHost && <span className="host-badge">HOST</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Footer ────────────────────────────────────────────────────────── */}
       <div className="lobby-footer">
         {isHost ? (
           <>
             {!canStart && (
-              <p className="hint">Need at least {3 - players.length} more player{3 - players.length !== 1 ? 's' : ''}</p>
+              <p className="hint center">
+                Need {3 - players.length} more player{3 - players.length !== 1 ? 's' : ''} to start
+              </p>
             )}
             <button
               className="btn btn-primary btn-lg"
@@ -102,10 +100,13 @@ export function GameLobby({
         ) : (
           <div className="waiting-pulse">
             <span className="pulse-dot" />
-            Waiting for host to start…
+            <span className="pulse-dot" style={{ animationDelay: '0.2s' }} />
+            <span className="pulse-dot" style={{ animationDelay: '0.4s' }} />
+            <span>Waiting for host to start…</span>
           </div>
         )}
       </div>
+
     </div>
   )
 }
