@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 
+/// <reference types="vite/client" />
+
 import { useEffect, useState } from 'react'
-import { useAccount, useConnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { injected } from 'wagmi/connectors'
+import { useAccount, useConnect, useConnectors, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatUnits } from 'viem'
+import { WALLET_ADAPTERS } from '@web3auth/base'
+import { web3AuthInstance } from '../config/web3auth'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { useUBIClaim } from '../hooks/useUBIClaim'
 import type { PublicLobby } from '../types'
@@ -46,7 +49,26 @@ export function Home({
 }: Props) {
   const { address, isConnected } = useAccount()
   const { connect, isPending: isConnecting } = useConnect()
+  const connectors = useConnectors()
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
+
+  const [loginEmail, setLoginEmail] = useState('')
+
+  function connectWith(id: string) {
+    const connector = connectors.find(c => c.id === id)
+    if (connector) connect({ connector })
+  }
+
+  async function connectWithEmail() {
+    if (!loginEmail.trim()) return
+    const connector = connectors.find(c => c.id === 'web3auth-email')
+    if (!connector) return
+    await web3AuthInstance.connectTo(WALLET_ADAPTERS.AUTH, {
+      loginProvider: 'email_passwordless',
+      extraLoginOptions: { login_hint: loginEmail.trim() },
+    })
+    connect({ connector })
+  }
 
   const [tab, setTab] = useState<Tab>('join')
   const [roomCode, setRoomCode] = useState('')
@@ -89,10 +111,6 @@ export function Home({
     }
     setPendingAction(null)
   }, [approvalConfirmed]) // eslint-disable-line
-
-  useEffect(() => {
-    if (!isConnected) connect({ connector: injected() })
-  }, []) // eslint-disable-line
 
   useEffect(() => {
     if (tab === 'browse') fetchLobbies()
@@ -165,19 +183,48 @@ export function Home({
           </div>
         </div>
 
-        <button
-          className="btn btn-primary btn-lg connect-cta"
-          onClick={() => connect({ connector: injected() })}
-          disabled={isConnecting}
-        >
-          {isConnecting ? (
-            <><span className="btn-spinner" />Connecting…</>
-          ) : (
-            <><span>🔐</span> Connect Wallet</>
-          )}
-        </button>
+        <div className="social-login-group">
+          <input
+            className="input connect-email-input"
+            type="email"
+            placeholder="Enter your email"
+            value={loginEmail}
+            onChange={e => setLoginEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && connectWithEmail()}
+            disabled={isConnecting}
+          />
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={connectWithEmail}
+            disabled={isConnecting || !loginEmail.trim()}
+          >
+            {isConnecting
+              ? <><span className="btn-spinner" />Connecting…</>
+              : <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>
+                  </svg>
+                  Continue with email
+                </>
+            }
+          </button>
 
-        <p className="connect-footer">Powered by MiniPay &amp; GoodDollar on Celo</p>
+          <div className="connect-or"><span>or</span></div>
+
+          <button
+            className="social-login-btn"
+            onClick={() => connectWith('injected')}
+            disabled={isConnecting}
+          >
+            <svg className="social-login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="6" width="20" height="14" rx="2"/>
+              <path d="M2 10h20M16 14h2"/>
+            </svg>
+            <span>Continue with wallet</span>
+          </button>
+        </div>
+
+        <p className="connect-footer">By continuing you agree to our terms of service.</p>
       </div>
     )
   }
