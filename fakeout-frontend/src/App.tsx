@@ -135,6 +135,7 @@ export default function App() {
         roundTimeoutSeconds={game.roundTimeoutSeconds}
         voteTimeoutSeconds={game.voteTimeoutSeconds}
         chatMessages={game.chatMessages}
+        typingUsers={game.typingUsers}
         hasVoted={game.hasVoted}
         voteOptions={game.voteOptions}
         voteProgress={game.voteProgress}
@@ -144,6 +145,9 @@ export default function App() {
         error={game.error}
         clearError={game.clearError}
         onSendMessage={game.sendChatMessage}
+        onTyping={game.sendTyping}
+        onTypingStop={game.sendTypingStop}
+        onReaction={game.sendReaction}
         onSubmitVote={game.submitVote}
       />
     )

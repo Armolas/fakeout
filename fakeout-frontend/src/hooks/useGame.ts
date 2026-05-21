@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import type {
+  ChatMessage,
   GamePhase,
   GameResultPayload,
   LobbyPlayer,
   LobbyState,
   PublicPlayer,
   TiebreakPayload,
+  TypingUser,
   VoteStartedPayload,
 } from '../types'
 
@@ -36,7 +38,8 @@ interface GameState {
 
   // Discussion phase
   roundTimeoutSeconds: number
-  chatMessages: Array<{ walletAddress: string; displayName: string; text: string }>
+  chatMessages: ChatMessage[]
+  typingUsers: TypingUser[]
 
   // Vote phase
   hasVoted: boolean
@@ -69,6 +72,7 @@ const INITIAL_STATE: GameState = {
   currentRound: 1,
   roundTimeoutSeconds: 120,
   chatMessages: [],
+  typingUsers: [],
   hasVoted: false,
   voteOptions: [],
   voteProgress: null,
@@ -83,6 +87,7 @@ const INITIAL_STATE: GameState = {
 export function useGame(walletAddress: string, displayName: string) {
   const [state, setState] = useState<GameState>(INITIAL_STATE)
   const socketRef = useRef<Socket | null>(null)
+  const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const walletRef = useRef(walletAddress)
   walletRef.current = walletAddress
   const stateRef = useRef(state)
@@ -193,6 +198,7 @@ export function useGame(walletAddress: string, displayName: string) {
         players: data.players,
         totalRounds: data.totalRounds,
         chatMessages: [],
+        typingUsers: [],
         hasVoted: false,
         voteOptions: [],
         voteProgress: null,
@@ -210,11 +216,61 @@ export function useGame(walletAddress: string, displayName: string) {
         totalRounds: data.totalRounds,
         roundTimeoutSeconds: data.timeoutSeconds,
         chatMessages: [],
+        typingUsers: [],
       })
     })
 
-    socket.on('chat:message', (data: { walletAddress: string; displayName: string; text: string }) => {
-      setState(prev => ({ ...prev, chatMessages: [...prev.chatMessages, data] }))
+    socket.on('chat:message', (data: ChatMessage) => {
+      setState(prev => ({
+        ...prev,
+        chatMessages: [...prev.chatMessages, data],
+        typingUsers: prev.typingUsers.filter(
+          t => t.walletAddress !== data.walletAddress.toLowerCase()
+        ),
+      }))
+    })
+
+    socket.on('chat:typing', (data: TypingUser) => {
+      const addr = data.walletAddress.toLowerCase()
+      if (addr === walletRef.current.toLowerCase()) return
+
+      setState(prev => {
+        if (prev.typingUsers.some(t => t.walletAddress === addr)) return prev
+        return { ...prev, typingUsers: [...prev.typingUsers, data] }
+      })
+
+      const existing = typingTimeoutsRef.current.get(addr)
+      if (existing) clearTimeout(existing)
+      typingTimeoutsRef.current.set(
+        addr,
+        setTimeout(() => {
+          setState(prev => ({
+            ...prev,
+            typingUsers: prev.typingUsers.filter(t => t.walletAddress !== addr),
+          }))
+          typingTimeoutsRef.current.delete(addr)
+        }, 4000)
+      )
+    })
+
+    socket.on('chat:typing_stop', (data: { walletAddress: string }) => {
+      const addr = data.walletAddress.toLowerCase()
+      const t = typingTimeoutsRef.current.get(addr)
+      if (t) clearTimeout(t)
+      typingTimeoutsRef.current.delete(addr)
+      setState(prev => ({
+        ...prev,
+        typingUsers: prev.typingUsers.filter(t => t.walletAddress !== addr),
+      }))
+    })
+
+    socket.on('chat:reaction', (data: { messageId: string; reactions: Record<string, string[]> }) => {
+      setState(prev => ({
+        ...prev,
+        chatMessages: prev.chatMessages.map(m =>
+          m.id === data.messageId ? { ...m, reactions: data.reactions } : m
+        ),
+      }))
     })
 
     // ── Vote events ───────────────────────────────────────────────────────────
@@ -341,12 +397,43 @@ export function useGame(walletAddress: string, displayName: string) {
     })
   }, [state.roomCode])
 
-  const sendChatMessage = useCallback((text: string) => {
+  const sendChatMessage = useCallback((
+    text: string,
+    opts?: { replyToId?: string; mentionWalletAddresses?: string[] }
+  ) => {
     patch({ error: null })
     socketRef.current?.emit('chat:message', {
       roomCode: state.roomCode,
       walletAddress: walletRef.current,
       text,
+      replyToId: opts?.replyToId,
+      mentionWalletAddresses: opts?.mentionWalletAddresses,
+    })
+  }, [state.roomCode])
+
+  const sendTyping = useCallback(() => {
+    if (!state.roomCode) return
+    socketRef.current?.emit('chat:typing', {
+      roomCode: state.roomCode,
+      walletAddress: walletRef.current,
+    })
+  }, [state.roomCode])
+
+  const sendTypingStop = useCallback(() => {
+    if (!state.roomCode) return
+    socketRef.current?.emit('chat:typing_stop', {
+      roomCode: state.roomCode,
+      walletAddress: walletRef.current,
+    })
+  }, [state.roomCode])
+
+  const sendReaction = useCallback((messageId: string, emoji: string) => {
+    if (!state.roomCode) return
+    socketRef.current?.emit('chat:reaction', {
+      roomCode: state.roomCode,
+      messageId,
+      walletAddress: walletRef.current,
+      emoji,
     })
   }, [state.roomCode])
 
@@ -379,6 +466,9 @@ export function useGame(walletAddress: string, displayName: string) {
     rejoinGame,
     startGame,
     sendChatMessage,
+    sendTyping,
+    sendTypingStop,
+    sendReaction,
     submitVote,
     clearError,
     resetGame,

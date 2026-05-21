@@ -5,6 +5,8 @@ import {
   JoinGamePayload,
   StartGamePayload,
   ChatMessagePayload,
+  ChatTypingPayload,
+  ChatReactionPayload,
   SubmitVotePayload,
   RejoinGamePayload,
   Game,
@@ -18,6 +20,22 @@ const roundTimers = new Map<string, NodeJS.Timeout>()
 
 // socket.id → walletAddress (for disconnect lookup)
 const socketWalletMap = new Map<string, string>()
+// roomCode:messageId → emoji → Set<walletAddress>
+const messageReactions = new Map<string, Map<string, Set<string>>>()
+
+function reactionKey(roomCode: string, messageId: string) {
+  return `${roomCode}:${messageId}`
+}
+
+function serializeReactions(roomCode: string, messageId: string): Record<string, string[]> {
+  const map = messageReactions.get(reactionKey(roomCode, messageId))
+  if (!map) return {}
+  const out: Record<string, string[]> = {}
+  for (const [emoji, wallets] of map.entries()) {
+    out[emoji] = [...wallets]
+  }
+  return out
+}
 // walletAddress → reconnect timer
 const reconnectTimers = new Map<string, NodeJS.Timeout>()
 
@@ -220,14 +238,71 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         p => p.walletAddress === payload.walletAddress.toLowerCase()
       )
 
+      const messageId = crypto.randomUUID()
+      messageReactions.set(reactionKey(payload.roomCode, messageId), new Map())
+
       io.to(payload.roomCode).emit('chat:message', {
+        id: messageId,
         walletAddress: payload.walletAddress.toLowerCase(),
         displayName: sender!.displayName,
         text: payload.text.trim(),
+        timestamp: Date.now(),
+        replyToId: payload.replyToId,
+        mentionWalletAddresses: payload.mentionWalletAddresses ?? [],
+        reactions: {},
       })
     } catch (err: any) {
       socket.emit('error', { code: err.message, message: err.message })
     }
+  })
+
+  socket.on('chat:typing', (payload: ChatTypingPayload) => {
+    const game = GameManager.getGame(payload.roomCode)
+    if (!game || game.status !== 'active') return
+    const player = Object.values(game.players).find(
+      p => p.walletAddress === payload.walletAddress.toLowerCase()
+    )
+    if (!player) return
+    socket.to(payload.roomCode).emit('chat:typing', {
+      walletAddress: payload.walletAddress.toLowerCase(),
+      displayName: player.displayName,
+    })
+  })
+
+  socket.on('chat:typing_stop', (payload: ChatTypingPayload) => {
+    socket.to(payload.roomCode).emit('chat:typing_stop', {
+      walletAddress: payload.walletAddress.toLowerCase(),
+    })
+  })
+
+  socket.on('chat:reaction', (payload: ChatReactionPayload) => {
+    const allowed = ['👍', '❤️', '😂', '😮', '🔥']
+    if (!allowed.includes(payload.emoji)) return
+
+    const key = reactionKey(payload.roomCode, payload.messageId)
+    let map = messageReactions.get(key)
+    if (!map) {
+      map = new Map()
+      messageReactions.set(key, map)
+    }
+
+    const wallet = payload.walletAddress.toLowerCase()
+    let set = map.get(payload.emoji)
+    if (!set) {
+      set = new Set()
+      map.set(payload.emoji, set)
+    }
+    if (set.has(wallet)) {
+      set.delete(wallet)
+      if (set.size === 0) map.delete(payload.emoji)
+    } else {
+      set.add(wallet)
+    }
+
+    io.to(payload.roomCode).emit('chat:reaction', {
+      messageId: payload.messageId,
+      reactions: serializeReactions(payload.roomCode, payload.messageId),
+    })
   })
 
   // ── vote:submit ─────────────────────────────────────────────────────────────

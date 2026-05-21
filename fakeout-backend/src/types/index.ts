@@ -134,6 +134,20 @@ export interface ChatMessagePayload {
   roomCode: string
   walletAddress: string
   text: string
+  replyToId?: string
+  mentionWalletAddresses?: string[]
+}
+
+export interface ChatTypingPayload {
+  roomCode: string
+  walletAddress: string
+}
+
+export interface ChatReactionPayload {
+  roomCode: string
+  messageId: string
+  walletAddress: string
+  emoji: string
 }
 
 export interface SubmitVotePayload {

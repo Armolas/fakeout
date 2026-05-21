@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { GameChat } from '../components/GameChat'
 import type {
+  ChatMessage,
   GamePhase,
   PublicPlayer,
+  TypingUser,
 } from '../types'
 
 interface Props {
@@ -12,7 +15,8 @@ interface Props {
   players: PublicPlayer[]
   roundTimeoutSeconds: number
   voteTimeoutSeconds: number
-  chatMessages: Array<{ walletAddress: string; displayName: string; text: string }>
+  chatMessages: ChatMessage[]
+  typingUsers: TypingUser[]
   hasVoted: boolean
   voteOptions: PublicPlayer[]
   voteProgress: { votesIn: number; totalVoters: number } | null
@@ -21,7 +25,13 @@ interface Props {
   walletAddress: string
   error: string | null
   clearError: () => void
-  onSendMessage: (text: string) => void
+  onSendMessage: (
+    text: string,
+    opts?: { replyToId?: string; mentionWalletAddresses?: string[] }
+  ) => void
+  onTyping: () => void
+  onTypingStop: () => void
+  onReaction: (messageId: string, emoji: string) => void
   onSubmitVote: (walletAddress: string) => void
 }
 
@@ -34,6 +44,7 @@ export function GamePlay({
   roundTimeoutSeconds,
   voteTimeoutSeconds,
   chatMessages,
+  typingUsers,
   hasVoted,
   voteOptions,
   voteProgress,
@@ -43,12 +54,13 @@ export function GamePlay({
   error,
   clearError,
   onSendMessage,
+  onTyping,
+  onTypingStop,
+  onReaction,
   onSubmitVote,
 }: Props) {
-  const [messageText, setMessageText] = useState('')
   const [timeLeft, setTimeLeft] = useState(roundTimeoutSeconds)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (phase === 'clue_phase') {
@@ -81,17 +93,6 @@ export function GamePlay({
       clearInterval(timerRef.current)
       timerRef.current = null
     }
-  }
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
-
-  function handleSend() {
-    const trimmed = messageText.trim()
-    if (!trimmed) return
-    onSendMessage(trimmed)
-    setMessageText('')
   }
 
   // ── Word reveal phase ──────────────────────────────────────────────────────
@@ -132,60 +133,23 @@ export function GamePlay({
 
     return (
       <div className="screen chat-screen">
-        <div className="chat-word-bar">
-          {role === 'crewmate'
-            ? <span>Word: <strong>{word}</strong></span>
-            : <span>Hint: <strong>{hint}</strong> · Impostor</span>}
-        </div>
-
-        <div className="game-header">
-          <span className="round-badge">Discussion</span>
-          {isClosed
-            ? <span className="timer timer-warn">0s</span>
-            : <Timer seconds={timeLeft} warn={timeLeft <= 10} />}
-        </div>
-
-        {error && <div className="error-banner" onClick={clearError}>{error}</div>}
-
-        <div className="chat-messages">
-          {chatMessages.map((entry, i) => {
-            const isMine = entry.walletAddress.toLowerCase() === walletAddress.toLowerCase()
-            return (
-              <div key={i} className={`chat-bubble-row ${isMine ? 'mine' : 'theirs'}`}>
-                {!isMine && <span className="chat-name">{entry.displayName}</span>}
-                <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`}>
-                  {entry.text}
-                </div>
-              </div>
-            )
-          })}
-          <div ref={chatEndRef} />
-        </div>
-
-        <div className="chat-input-bar">
-          {isClosed ? (
-            <div className="chat-closed-banner">Chat closed · Voting soon…</div>
-          ) : (
-            <div className="clue-row">
-              <input
-                className="input"
-                placeholder="Say something…"
-                value={messageText}
-                maxLength={200}
-                onChange={e => setMessageText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
-                autoFocus
-              />
-              <button
-                className="btn btn-primary"
-                disabled={!messageText.trim()}
-                onClick={handleSend}
-              >
-                Send
-              </button>
-            </div>
-          )}
-        </div>
+        <GameChat
+          word={word}
+          hint={hint}
+          role={role}
+          players={players}
+          messages={chatMessages}
+          typingUsers={typingUsers}
+          walletAddress={walletAddress}
+          isClosed={isClosed}
+          timeLeft={isClosed ? 0 : timeLeft}
+          error={error}
+          clearError={clearError}
+          onSendMessage={onSendMessage}
+          onTyping={onTyping}
+          onTypingStop={onTypingStop}
+          onReaction={onReaction}
+        />
       </div>
     )
   }

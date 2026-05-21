@@ -116,3 +116,19 @@ export interface PublicLobby {
   stakeAmount: string
   createdAt: string
 }
+
+export interface ChatMessage {
+  id: string
+  walletAddress: string
+  displayName: string
+  text: string
+  timestamp: number
+  replyToId?: string
+  mentionWalletAddresses?: string[]
+  reactions?: Record<string, string[]>
+}
+
+export interface TypingUser {
+  walletAddress: string
+  displayName: string
+}
