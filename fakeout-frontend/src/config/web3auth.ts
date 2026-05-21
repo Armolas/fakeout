@@ -1,7 +1,7 @@
 import { Web3AuthNoModal } from '@web3auth/no-modal'
 import { AuthAdapter } from '@web3auth/auth-adapter'
 import { EthereumPrivateKeyProvider } from '@web3auth/ethereum-provider'
-import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from '@web3auth/base'
+import { CHAIN_NAMESPACES, UX_MODE, WEB3AUTH_NETWORK } from '@web3auth/base'
 import { Web3AuthConnector } from '@web3auth/web3auth-wagmi-connector'
 import { celoSepolia } from 'wagmi/chains'
 
@@ -26,7 +26,10 @@ function createWeb3Auth() {
     privateKeyProvider,
   })
 
-  instance.configureAdapter(new AuthAdapter({ privateKeyProvider }))
+  instance.configureAdapter(new AuthAdapter({
+    privateKeyProvider,
+    adapterSettings: { uxMode: UX_MODE.REDIRECT },
+  }))
   return instance
 }
 
