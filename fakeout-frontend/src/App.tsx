@@ -7,7 +7,6 @@ import { GameLobby } from './screens/GameLobby'
 import { GamePlay } from './screens/GamePlay'
 import { Results } from './screens/Results'
 import { FirstTimeModal } from './components/FirstTimeModal'
-
 type PlayerStats = {
   gamesPlayed: number
   gamesWon: number

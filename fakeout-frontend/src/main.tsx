@@ -4,6 +4,7 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './config/wagmi'
 import App from './App'
+import { WhimsyBackdrop } from './components/WhimsyBackdrop'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
+        <WhimsyBackdrop />
         <App />
       </QueryClientProvider>
     </WagmiProvider>
