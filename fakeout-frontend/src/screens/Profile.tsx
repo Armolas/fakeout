@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { formatUnits } from 'viem'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { UBIBanner } from '../components/UBIBanner'
+import { useTheme } from '../hooks/useTheme'
 import { useUBIClaim } from '../hooks/useUBIClaim'
 
 type PlayerStats = {
@@ -24,6 +26,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme()
 
   function saveEdit() {
     const trimmed = editValue.trim()
@@ -146,6 +149,13 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
         claimSuccess={claimSuccess}
         onClaim={claim}
       />
+
+      <div className="profile-card">
+        <p className="profile-card-label">Appearance</p>
+        <div className="profile-theme-section">
+          <ThemeToggle preference={themePreference} onChange={setThemePreference} />
+        </div>
+      </div>
 
       {/* ── Account ───────────────────────────────────────────────────────── */}
       <div className="profile-card">

@@ -76,6 +76,10 @@ export function Home({
   const [gameType, setGameType] = useState<'public' | 'private'>('public')
   const [stakeAmount, setStakeAmount] = useState(STAKE_OPTIONS[0].value)
   const [discussionSeconds, setDiscussionSeconds] = useState(120)
+  const [customDiscussion, setCustomDiscussion] = useState(false)
+  const [customDiscussionInput, setCustomDiscussionInput] = useState('')
+  const [customStake, setCustomStake] = useState(false)
+  const [customStakeInput, setCustomStakeInput] = useState('')
   const [lobbies, setLobbies] = useState<PublicLobby[]>([])
   const [loadingLobbies, setLoadingLobbies] = useState(false)
   const [needsApproval, setNeedsApproval] = useState(false)
@@ -346,13 +350,40 @@ export function Home({
                 {DISCUSSION_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
-                    className={`option-pill ${discussionSeconds === opt.value ? 'active' : ''}`}
-                    onClick={() => setDiscussionSeconds(opt.value)}
+                    className={`option-pill ${!customDiscussion && discussionSeconds === opt.value ? 'active' : ''}`}
+                    onClick={() => { setCustomDiscussion(false); setDiscussionSeconds(opt.value) }}
                   >
                     {opt.label}
                   </button>
                 ))}
+                <button
+                  className={`option-pill ${customDiscussion ? 'active' : ''}`}
+                  onClick={() => { setCustomDiscussion(true); setCustomDiscussionInput('') }}
+                >
+                  Custom
+                </button>
               </div>
+              {customDiscussion && (
+                <div className="custom-input-row">
+                  <input
+                    className="input input-custom"
+                    type="number"
+                    min={1}
+                    max={60}
+                    placeholder="Minutes (1–60)"
+                    value={customDiscussionInput}
+                    onChange={e => {
+                      const val = e.target.value
+                      setCustomDiscussionInput(val)
+                      const mins = parseInt(val)
+                      if (!isNaN(mins) && mins >= 1 && mins <= 60) {
+                        setDiscussionSeconds(mins * 60)
+                      }
+                    }}
+                  />
+                  <span className="custom-input-unit">min</span>
+                </div>
+              )}
             </div>
 
             <div className="field">
@@ -361,26 +392,60 @@ export function Home({
                 {STAKE_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
-                    className={`option-pill ${stakeAmount === opt.value ? 'active' : ''}`}
-                    onClick={() => setStakeAmount(opt.value)}
+                    className={`option-pill ${!customStake && stakeAmount === opt.value ? 'active' : ''}`}
+                    onClick={() => { setCustomStake(false); setStakeAmount(opt.value) }}
                   >
                     {opt.label}
                   </button>
                 ))}
+                <button
+                  className={`option-pill ${customStake ? 'active' : ''}`}
+                  onClick={() => { setCustomStake(true); setCustomStakeInput('') }}
+                >
+                  Custom
+                </button>
               </div>
+              {customStake && (
+                <div className="custom-input-row">
+                  <input
+                    className="input input-custom"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="Amount in G$"
+                    value={customStakeInput}
+                    onChange={e => {
+                      const val = e.target.value
+                      setCustomStakeInput(val)
+                      const gd = parseFloat(val)
+                      if (!isNaN(gd) && gd >= 0) {
+                        setStakeAmount(BigInt(Math.round(gd * 1e18)).toString())
+                      }
+                    }}
+                  />
+                  <span className="custom-input-unit">G$</span>
+                </div>
+              )}
             </div>
 
             <div className="create-summary">
               <span className="summary-chip">{gameType === 'public' ? '🌐 Public' : '🔒 Private'}</span>
-              <span className="summary-chip">⏱ {discussionSeconds / 60} min</span>
+              <span className="summary-chip">⏱ {(discussionSeconds / 60).toFixed(discussionSeconds % 60 === 0 ? 0 : 1)} min</span>
               <span className="summary-chip">
-                {stakeAmount === '0' ? '🆓 Free' : `💰 ${STAKE_OPTIONS.find(o => o.value === stakeAmount)?.label}`}
+                {stakeAmount === '0'
+                  ? '🆓 Free'
+                  : `💰 ${customStake ? `${customStakeInput} G$` : STAKE_OPTIONS.find(o => o.value === stakeAmount)?.label}`}
               </span>
             </div>
 
             <button
               className="btn btn-primary btn-lg"
-              disabled={!displayName.trim() || isApprovalInFlight}
+              disabled={
+                !displayName.trim() ||
+                isApprovalInFlight ||
+                (customDiscussion && (!customDiscussionInput || discussionSeconds < 60)) ||
+                (customStake && customStakeInput === '')
+              }
               onClick={handleCreate}
             >
               {isApprovalInFlight
