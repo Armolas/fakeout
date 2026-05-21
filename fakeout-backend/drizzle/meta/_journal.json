@@ -8,6 +8,13 @@
       "when": 1779140416760,
       "tag": "0000_striped_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779322630318,
+      "tag": "0001_stiff_eternity",
+      "breakpoints": true
     }
   ]
 }

@@ -46,19 +46,20 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
 
   return (
     <div className="screen profile-screen">
-      {/* Back */}
-      <div className="profile-header">
+
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <div className="profile-topbar">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
       </div>
 
-      {/* Avatar + name */}
+      {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <div className="profile-hero">
         <div className="profile-avatar-lg">
           {displayName?.[0]?.toUpperCase() ?? '?'}
         </div>
 
         {editing ? (
-          <div className="profile-edit-row">
+          <div className="profile-edit-inline">
             <input
               className="input profile-name-input"
               value={editValue}
@@ -70,17 +71,19 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
                 if (e.key === 'Escape') setEditing(false)
               }}
             />
-            <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={!editValue.trim()}>
-              Save
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
+            <div className="profile-edit-actions">
+              <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={!editValue.trim()}>Save</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
           </div>
         ) : (
           <div className="profile-name-row">
             <span className="profile-name">{displayName || 'Anonymous'}</span>
-            <button className="profile-edit-btn" onClick={() => { setEditValue(displayName); setEditing(true) }} title="Edit name">
+            <button
+              className="profile-edit-btn"
+              onClick={() => { setEditValue(displayName); setEditing(true) }}
+              title="Edit name"
+            >
               ✏️
             </button>
           </div>
@@ -88,49 +91,59 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
 
         <button className="profile-address" onClick={copyAddress}>
           <span className="profile-address-text">
-            {walletAddress.slice(0, 10)}…{walletAddress.slice(-8)}
+            {walletAddress.slice(0, 8)}…{walletAddress.slice(-6)}
           </span>
-          <span className="profile-copy-badge">{copied ? '✓ Copied' : 'Copy'}</span>
+          <span className={`profile-copy-badge ${copied ? 'copied' : ''}`}>
+            {copied ? '✓ Copied' : 'Copy'}
+          </span>
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="profile-section-label">Statistics</div>
+      {/* ── Stats ─────────────────────────────────────────────────────────── */}
+      <div className="profile-card">
+        <p className="profile-card-label">Statistics</p>
+        <div className="profile-stats-row">
+          <div className="profile-stat">
+            <span className="profile-stat-value">{playerStats?.gamesPlayed ?? 0}</span>
+            <span className="profile-stat-label">Played</span>
+          </div>
+          <div className="profile-stat-divider" />
+          <div className="profile-stat">
+            <span className="profile-stat-value">{playerStats?.gamesWon ?? 0}</span>
+            <span className="profile-stat-label">Won</span>
+          </div>
+          <div className="profile-stat-divider" />
+          <div className="profile-stat">
+            <span className="profile-stat-value">{winRate}%</span>
+            <span className="profile-stat-label">Win rate</span>
+          </div>
+        </div>
 
-      <div className="profile-stats-grid">
-        <div className="profile-stat-card">
-          <span className="profile-stat-value">{playerStats?.gamesPlayed ?? 0}</span>
-          <span className="profile-stat-label">Played</span>
-        </div>
-        <div className="profile-stat-card">
-          <span className="profile-stat-value">{playerStats?.gamesWon ?? 0}</span>
-          <span className="profile-stat-label">Won</span>
-        </div>
-        <div className="profile-stat-card">
-          <span className="profile-stat-value">{winRate}%</span>
-          <span className="profile-stat-label">Win rate</span>
-        </div>
+        {hasStaked && (
+          <>
+            <div className="profile-card-divider" />
+            <div className="profile-amounts">
+              <div className="profile-amount won">
+                <span className="profile-amount-label">Total won</span>
+                <span className="profile-amount-value">+{wonG$} G$</span>
+              </div>
+              <div className="profile-amount lost">
+                <span className="profile-amount-label">Total lost</span>
+                <span className="profile-amount-value">-{lostG$} G$</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {hasStaked && (
-        <div className="profile-amount-row">
-          <div className="amount-card won">
-            <span className="amount-value">+{wonG$} G$</span>
-            <span className="amount-label">Total won</span>
-          </div>
-          <div className="amount-card lost">
-            <span className="amount-value">-{lostG$} G$</span>
-            <span className="amount-label">Total lost</span>
-          </div>
-        </div>
-      )}
+      {/* ── Account ───────────────────────────────────────────────────────── */}
+      <div className="profile-card">
+        <button className="profile-disconnect" onClick={onDisconnect}>
+          <span>Disconnect wallet</span>
+          <span className="profile-disconnect-arrow">→</span>
+        </button>
+      </div>
 
-      {/* Account */}
-      <div className="profile-section-label" style={{ marginTop: 8 }}>Account</div>
-
-      <button className="btn btn-danger btn-lg" onClick={onDisconnect}>
-        Disconnect Wallet
-      </button>
     </div>
   )
 }
