@@ -101,7 +101,9 @@ export function Home({
     query: { enabled: !!address && BigInt(stakeAmount) > 0n },
   })
 
-  const { writeContract: approve, data: approveTxHash, isPending: isApproving } = useWriteContract()
+  const MAX_UINT256 = 2n ** 256n - 1n
+
+  const { writeContract: approve, data: approveTxHash, isPending: isApproving, error: approveError } = useWriteContract()
   const { isLoading: isWaitingApproval, isSuccess: approvalConfirmed } = useWaitForTransactionReceipt({ hash: approveTxHash })
 
   useEffect(() => {
@@ -142,7 +144,7 @@ export function Home({
     if (BigInt(stakeAmount) > 0n && !hasEnoughAllowance()) {
       setNeedsApproval(true)
       setPendingAction('create')
-      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, BigInt(stakeAmount)] })
+      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
       return
     }
     onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds)
@@ -155,13 +157,21 @@ export function Home({
     if (BigInt(stakeAmount) > 0n && !hasEnoughAllowance()) {
       setNeedsApproval(true)
       setPendingAction('join')
-      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, BigInt(stakeAmount)] })
+      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
       return
     }
     onJoinGame(wallet, displayName, rc || undefined)
   }
 
   const isApprovalInFlight = isApproving || isWaitingApproval
+
+  function approveErrorMessage(err: unknown): string {
+    const msg = (err as { message?: string })?.message ?? ''
+    if (msg.includes('insufficient funds')) return 'Not enough CELO for gas. Add a small amount of CELO to your wallet to cover fees.'
+    if (msg.includes('rejected') || msg.includes('denied') || msg.includes('cancelled')) return 'Approval cancelled.'
+    if (msg.includes('User rejected')) return 'Approval cancelled.'
+    return 'Approval failed. Please try again.'
+  }
 
   // ── Connect screen ──────────────────────────────────────────────────────────
   if (!isConnected) {
@@ -309,6 +319,9 @@ export function Home({
             {needsApproval && isApprovalInFlight && (
               <p className="approve-hint">Approve G$ spend in your wallet — game starts automatically after.</p>
             )}
+            {approveError && (
+              <p className="approve-error">{approveErrorMessage(approveError)}</p>
+            )}
 
             {!displayName.trim() && (
               <p className="name-nudge">Set a name in your profile to play</p>
@@ -455,6 +468,9 @@ export function Home({
 
             {needsApproval && isApprovalInFlight && (
               <p className="approve-hint">Approve G$ spend in your wallet — game starts automatically after.</p>
+            )}
+            {approveError && (
+              <p className="approve-error">{approveErrorMessage(approveError)}</p>
             )}
 
             {!displayName.trim() && (
