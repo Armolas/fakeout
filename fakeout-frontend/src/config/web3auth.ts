@@ -14,34 +14,29 @@ const chainConfig = {
   tickerName: 'Celo',
 }
 
-const privateKeyProvider = new EthereumPrivateKeyProvider({ config: { chainConfig } })
+function createWeb3Auth() {
+  const clientId = import.meta.env.VITE_WEB3AUTH_CLIENT_ID
+  if (!clientId) return null
 
-export const web3AuthInstance = new Web3AuthNoModal({
-  clientId: import.meta.env.VITE_WEB3AUTH_CLIENT_ID,
-  web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
-  privateKeyProvider,
-})
+  const privateKeyProvider = new EthereumPrivateKeyProvider({ config: { chainConfig } })
 
-const authAdapter = new AuthAdapter({ privateKeyProvider })
-web3AuthInstance.configureAdapter(authAdapter)
+  const instance = new Web3AuthNoModal({
+    clientId,
+    web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+    privateKeyProvider,
+  })
 
-export const googleConnector = Web3AuthConnector({
-  web3AuthInstance,
-  loginParams: { loginProvider: 'google' },
-  id: 'web3auth-google',
-  name: 'Google',
-})
+  instance.configureAdapter(new AuthAdapter({ privateKeyProvider }))
+  return instance
+}
 
-export const appleConnector = Web3AuthConnector({
-  web3AuthInstance,
-  loginParams: { loginProvider: 'apple' },
-  id: 'web3auth-apple',
-  name: 'Apple',
-})
+export const web3AuthInstance = createWeb3Auth()
 
-export const emailConnector = Web3AuthConnector({
-  web3AuthInstance,
-  loginParams: { loginProvider: 'email_passwordless' },
-  id: 'web3auth-email',
-  name: 'Email',
-})
+export const emailConnector = web3AuthInstance
+  ? Web3AuthConnector({
+      web3AuthInstance,
+      loginParams: { loginProvider: 'email_passwordless' },
+      id: 'web3auth-email',
+      name: 'Email',
+    })
+  : null

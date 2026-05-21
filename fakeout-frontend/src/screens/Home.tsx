@@ -60,7 +60,7 @@ export function Home({
   }
 
   async function connectWithEmail() {
-    if (!loginEmail.trim()) return
+    if (!loginEmail.trim() || !web3AuthInstance) return
     const connector = connectors.find(c => c.id === 'web3auth-email')
     if (!connector) return
     await web3AuthInstance.connectTo(WALLET_ADAPTERS.AUTH, {
