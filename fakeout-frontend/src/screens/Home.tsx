@@ -9,7 +9,9 @@ import { WALLET_ADAPTERS } from '@web3auth/base'
 import { web3AuthInstance } from '../config/web3auth'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { UBIBanner } from '../components/UBIBanner'
+import { IdentityVerificationModal } from '../components/IdentityVerificationModal'
 import { useUBIClaim } from '../hooks/useUBIClaim'
+import { useIdentityVerification } from '../hooks/useIdentityVerification'
 import type { PublicLobby } from '../types'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3001'
@@ -52,6 +54,7 @@ export function Home({
   const { connect, isPending: isConnecting } = useConnect()
   const connectors = useConnectors()
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
+  const { isWhitelisted, fvLink, isGenerating, generateLink, onVerified } = useIdentityVerification()
 
   const [loginEmail, setLoginEmail] = useState('')
 
@@ -273,6 +276,17 @@ export function Home({
           isClaiming={isClaiming}
           claimSuccess={claimSuccess}
           onClaim={claim}
+          isWhitelisted={isWhitelisted}
+          onVerifyClick={generateLink}
+          isVerifying={isGenerating}
+        />
+      )}
+
+      {fvLink && (
+        <IdentityVerificationModal
+          fvLink={fvLink}
+          onVerified={onVerified}
+          onClose={onVerified}
         />
       )}
 

@@ -5,8 +5,10 @@ import { GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { ERC20_ABI } from '../config/contracts'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { UBIBanner } from '../components/UBIBanner'
+import { IdentityVerificationModal } from '../components/IdentityVerificationModal'
 import { useTheme } from '../hooks/useTheme'
 import { useUBIClaim } from '../hooks/useUBIClaim'
+import { useIdentityVerification } from '../hooks/useIdentityVerification'
 
 type PlayerStats = {
   gamesPlayed: number
@@ -29,6 +31,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
+  const { isWhitelisted, fvLink, isGenerating, generateLink, onVerified } = useIdentityVerification()
   const { address } = useAccount()
   const { data: celoBalance } = useBalance({ address, query: { enabled: !!address } })
   const { data: gdBalance } = useReadContract({
@@ -179,7 +182,18 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
         isClaiming={isClaiming}
         claimSuccess={claimSuccess}
         onClaim={claim}
+        isWhitelisted={isWhitelisted}
+        onVerifyClick={generateLink}
+        isVerifying={isGenerating}
       />
+
+      {fvLink && (
+        <IdentityVerificationModal
+          fvLink={fvLink}
+          onVerified={onVerified}
+          onClose={onVerified}
+        />
+      )}
 
       <div className="profile-card">
         <p className="profile-card-label">Appearance</p>

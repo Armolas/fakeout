@@ -6,6 +6,9 @@ interface Props {
   isClaiming: boolean
   claimSuccess: boolean
   onClaim: () => void
+  isWhitelisted?: boolean | null
+  onVerifyClick?: () => void
+  isVerifying?: boolean
 }
 
 function hoursUntil(date: Date): string {
@@ -22,7 +25,27 @@ export function UBIBanner({
   isClaiming,
   claimSuccess,
   onClaim,
+  isWhitelisted,
+  onVerifyClick,
+  isVerifying,
 }: Props) {
+  if (isWhitelisted === false) {
+    return (
+      <div className="ubi-banner ubi-banner--verify">
+        <div className="ubi-info">
+          <span className="ubi-icon">🪪</span>
+          <div>
+            <p className="ubi-title">Verify identity to claim G$</p>
+            <p className="ubi-sub">GoodDollar requires a one-time face check</p>
+          </div>
+        </div>
+        <button className="btn btn-accent btn-sm" onClick={onVerifyClick} disabled={isVerifying}>
+          {isVerifying ? <><span className="btn-spinner" />Opening…</> : 'Verify'}
+        </button>
+      </div>
+    )
+  }
+
   if (entitlement > 0n) {
     return (
       <div className="ubi-banner ubi-banner--ready">
