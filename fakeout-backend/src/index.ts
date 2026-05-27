@@ -11,9 +11,14 @@ dotenv.config()
 const app = express()
 const httpServer = createServer(app)
 
+const ALLOWED_ORIGINS = [
+  process.env.CLIENT_URL || 'http://localhost:3000',
+  'https://playfakeout.xyz',
+]
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: ALLOWED_ORIGINS,
     methods: ['GET', 'POST'],
   },
   transports: ['websocket', 'polling'],
@@ -21,7 +26,7 @@ const io = new Server(httpServer, {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: ALLOWED_ORIGINS,
 }))
 app.use(express.json())
 
