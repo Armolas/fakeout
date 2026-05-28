@@ -1482,11 +1482,62 @@ body {
   transition: background 0.15s;
 }
 .fv-modal-close:hover { background: var(--surface2); color: var(--ink); }
+.fv-modal-header-actions { display: flex; align-items: center; gap: 4px; }
+.fv-newtab-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  transition: background 0.15s;
+}
+.fv-newtab-btn:hover { background: var(--surface2); color: var(--ink); }
+.fv-device-warning {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--surface-warn);
+  border-bottom: 1px solid rgba(201, 176, 122, 0.3);
+  font-size: 11px;
+  color: var(--warn-text);
+  line-height: 1.4;
+}
+.fv-modal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+.fv-state-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+}
+.fv-state-icon { font-size: 36px; }
+.fv-state-text { font-size: 14px; color: var(--text-sub); max-width: 260px; }
+.fv-spinner { width: 22px; height: 22px; border-width: 3px; }
+.fv-iframe-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  z-index: 1;
+}
 .fv-iframe {
   width: 100%;
   flex: 1;
   border: none;
   display: block;
+  height: 100%;
 }
 
 /* Bottom nav — sticker strip */

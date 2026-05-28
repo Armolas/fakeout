@@ -1,23 +1,19 @@
-import { useRef } from 'react'
+import { useState } from 'react'
 
 interface Props {
-  fvLink: string
+  fvLink: string | null
+  isGenerating: boolean
+  linkError: boolean
+  onRetry: () => void
   onVerified: () => void
   onClose: () => void
 }
 
-export function IdentityVerificationModal({ fvLink, onVerified, onClose }: Props) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+export function IdentityVerificationModal({ fvLink, isGenerating, linkError, onRetry, onClose }: Props) {
+  const [iframeLoaded, setIframeLoaded] = useState(false)
 
-  function handleIframeLoad() {
-    try {
-      const href = iframeRef.current?.contentWindow?.location.href
-      if (href && href.startsWith(window.location.origin)) {
-        onVerified()
-      }
-    } catch {
-      // Still on cross-origin GoodID page — ignore
-    }
+  function openInNewTab() {
+    if (fvLink) window.open(fvLink, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -25,16 +21,56 @@ export function IdentityVerificationModal({ fvLink, onVerified, onClose }: Props
       <div className="fv-modal">
         <div className="fv-modal-header">
           <span className="fv-modal-title">Verify with GoodDollar</span>
-          <button className="fv-modal-close" onClick={onClose} aria-label="Close">✕</button>
+          <div className="fv-modal-header-actions">
+            {fvLink && !linkError && (
+              <button className="fv-newtab-btn" onClick={openInNewTab} title="Open in new tab">
+                ↗
+              </button>
+            )}
+            <button className="fv-modal-close" onClick={onClose} aria-label="Close">✕</button>
+          </div>
         </div>
-        <iframe
-          ref={iframeRef}
-          src={fvLink}
-          className="fv-iframe"
-          onLoad={handleIframeLoad}
-          allow="camera; microphone"
-          title="GoodDollar Identity Verification"
-        />
+
+        {fvLink && !linkError && (
+          <div className="fv-device-warning">
+            If you see a "new device" error inside the window, tap ↗ to open in a new tab.
+          </div>
+        )}
+
+        <div className="fv-modal-body">
+          {isGenerating && (
+            <div className="fv-state-center">
+              <span className="btn-spinner fv-spinner" />
+              <p className="fv-state-text">Preparing verification…</p>
+            </div>
+          )}
+
+          {linkError && (
+            <div className="fv-state-center">
+              <p className="fv-state-icon">⚠️</p>
+              <p className="fv-state-text">Couldn't start verification. Check your wallet is connected to Celo.</p>
+              <button className="btn btn-accent btn-sm" onClick={onRetry}>Retry</button>
+            </div>
+          )}
+
+          {fvLink && !linkError && (
+            <>
+              {!iframeLoaded && (
+                <div className="fv-iframe-loading">
+                  <span className="btn-spinner fv-spinner" />
+                </div>
+              )}
+              <iframe
+                key={fvLink}
+                src={fvLink}
+                className="fv-iframe"
+                onLoad={() => setIframeLoaded(true)}
+                allow="camera; microphone; clipboard-write"
+                title="GoodDollar Identity Verification"
+              />
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -54,7 +54,7 @@ export function Home({
   const { connect, isPending: isConnecting } = useConnect()
   const connectors = useConnectors()
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
-  const { isWhitelisted, fvLink, isGenerating, generateLink, onVerified } = useIdentityVerification()
+  const { isWhitelisted, fvLink, isGenerating, linkError, generateLink, onVerified, closeModal } = useIdentityVerification()
 
   const [loginEmail, setLoginEmail] = useState('')
 
@@ -282,11 +282,14 @@ export function Home({
         />
       )}
 
-      {fvLink && (
+      {(fvLink || isGenerating || linkError) && (
         <IdentityVerificationModal
           fvLink={fvLink}
+          isGenerating={isGenerating}
+          linkError={linkError}
+          onRetry={generateLink}
           onVerified={onVerified}
-          onClose={onVerified}
+          onClose={closeModal}
         />
       )}
 

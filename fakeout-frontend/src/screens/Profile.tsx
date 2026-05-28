@@ -31,7 +31,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
-  const { isWhitelisted, fvLink, isGenerating, generateLink, onVerified } = useIdentityVerification()
+  const { isWhitelisted, fvLink, isGenerating, linkError, generateLink, onVerified, closeModal } = useIdentityVerification()
   const { address } = useAccount()
   const { data: celoBalance } = useBalance({ address, query: { enabled: !!address } })
   const { data: gdBalance } = useReadContract({
@@ -187,11 +187,14 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
         isVerifying={isGenerating}
       />
 
-      {fvLink && (
+      {(fvLink || isGenerating || linkError) && (
         <IdentityVerificationModal
           fvLink={fvLink}
+          isGenerating={isGenerating}
+          linkError={linkError}
+          onRetry={generateLink}
           onVerified={onVerified}
-          onClose={onVerified}
+          onClose={closeModal}
         />
       )}
 
