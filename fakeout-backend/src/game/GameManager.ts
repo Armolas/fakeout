@@ -50,6 +50,7 @@ export const GameManager = {
     type: GameType
     stakeAmount: string
     discussionSeconds: number
+    impostorCount?: number
   }): Promise<Game> {
     // Upsert player
     await db.insert(playersTable)
@@ -96,6 +97,7 @@ export const GameManager = {
       currentRound: 0,
       maxRounds: 1,
       discussionSeconds: Math.min(600, Math.max(30, params.discussionSeconds)),
+      impostorCount: Math.min(3, Math.max(1, params.impostorCount ?? 1)),
       createdBy: playerId,
       players: { [playerId]: hostPlayer },
       clues: [],
@@ -203,6 +205,9 @@ export const GameManager = {
     const playerList = Object.values(game.players)
     if (playerList.length < 3) throw new Error('NOT_ENOUGH_PLAYERS')
 
+    const requestedImpostors = game.impostorCount ?? getImpostorCount(playerList.length)
+    if (requestedImpostors >= playerList.length) throw new Error('NOT_ENOUGH_PLAYERS_FOR_IMPOSTORS')
+
     // Verify host
     const host = playerList.find(
       p => p.walletAddress === hostWalletAddress.toLowerCase()
@@ -215,7 +220,7 @@ export const GameManager = {
     game.hint = wordEntry.hint
 
     // Assign impostors randomly
-    const impostorCount = getImpostorCount(playerList.length)
+    const impostorCount = requestedImpostors
     const shuffled = [...playerList].sort(() => Math.random() - 0.5)
     const impostorIds = new Set(
       shuffled.slice(0, impostorCount).map(p => p.playerId)
@@ -302,6 +307,7 @@ export const GameManager = {
 
     // Next round
     game.currentRound++
+    game.status = 'active'
     game.clues.push({ roundNumber: game.currentRound, clues: [] })
     return { game, phase: 'next_round' }
   },

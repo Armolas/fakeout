@@ -66,6 +66,7 @@ export interface Game {
   currentRound: number
   maxRounds: number
   discussionSeconds: number
+  impostorCount: number
   createdBy: string        // playerId
   players: Record<string, GamePlayer>  // keyed by playerId
   clues: ClueRound[]
@@ -111,6 +112,7 @@ export interface CreateGamePayload {
   type: GameType
   stakeAmount: string
   discussionSeconds: number
+  impostorCount?: number
 }
 
 export interface JoinGamePayload {

@@ -32,7 +32,7 @@ const DISCUSSION_OPTIONS = [
 
 interface Props {
   onJoinGame: (walletAddress: string, displayName: string, roomCode?: string) => void
-  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) => void
+  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) => void
   connectedWallet: string
   displayName: string
   onOpenProfile: () => void
@@ -83,6 +83,7 @@ export function Home({
   const [customDiscussionInput, setCustomDiscussionInput] = useState('')
   const [customStake, setCustomStake] = useState(false)
   const [customStakeInput, setCustomStakeInput] = useState('')
+  const [impostorCount, setImpostorCount] = useState(1)
   const [lobbies, setLobbies] = useState<PublicLobby[]>([])
   const [loadingLobbies, setLoadingLobbies] = useState(false)
   const [needsApproval, setNeedsApproval] = useState(false)
@@ -115,7 +116,7 @@ export function Home({
     setNeedsApproval(false)
     const wallet = address!.toLowerCase()
     if (pendingAction === 'create') {
-      onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds)
+      onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds, impostorCount)
     } else {
       onJoinGame(wallet, displayName, roomCode || undefined)
     }
@@ -150,7 +151,7 @@ export function Home({
       approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
       return
     }
-    onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds)
+    onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds, impostorCount)
   }
 
   function handleJoin(code?: string) {
@@ -458,6 +459,21 @@ export function Home({
               )}
             </div>
 
+            <div className="field">
+              <label className="label">Impostors</label>
+              <div className="option-pills">
+                {[1, 2, 3].map(n => (
+                  <button
+                    key={n}
+                    className={`option-pill ${impostorCount === n ? 'active' : ''}`}
+                    onClick={() => setImpostorCount(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="create-summary">
               <span className="summary-chip">{gameType === 'public' ? '🌐 Public' : '🔒 Private'}</span>
               <span className="summary-chip">⏱ {(discussionSeconds / 60).toFixed(discussionSeconds % 60 === 0 ? 0 : 1)} min</span>
@@ -466,6 +482,7 @@ export function Home({
                   ? '🆓 Free'
                   : `💰 ${customStake ? `${customStakeInput} G$` : STAKE_OPTIONS.find(o => o.value === stakeAmount)?.label}`}
               </span>
+              <span className="summary-chip">🕵️ {impostorCount} impostor{impostorCount > 1 ? 's' : ''}</span>
             </div>
 
             <button
@@ -592,6 +609,7 @@ function friendlyError(code: string): string {
     GAME_FULL:            'This game is full.',
     NO_PUBLIC_GAME:       'No open public games. Try creating one!',
     NOT_ENOUGH_PLAYERS:   'Need at least 3 players to start.',
+    NOT_ENOUGH_PLAYERS_FOR_IMPOSTORS: 'Not enough players for that many impostors.',
     NOT_HOST:             'Only the host can start the game.',
     ALREADY_IN_GAME:      "You're already in this game.",
     ROOM_CODE_REQUIRED:   'Enter a room code to join a private game.',

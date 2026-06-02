@@ -18,6 +18,8 @@ const VOTE_TIMEOUT = parseInt(process.env.VOTE_TIMEOUT_SECONDS || '60') * 1000
 
 // Track round timers so we can clear them
 const roundTimers = new Map<string, NodeJS.Timeout>()
+// Track phase end times for reconnecting players (roomCode → unix ms)
+const phaseEndTimes = new Map<string, number>()
 
 // socket.id → walletAddress (for disconnect lookup)
 const socketWalletMap = new Map<string, string>()
@@ -81,6 +83,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         type: payload.type,
         stakeAmount: payload.stakeAmount,
         discussionSeconds: payload.discussionSeconds ?? 120,
+        impostorCount: payload.impostorCount ?? 1,
       })
 
       GameManager.setPlayerSocket(payload.walletAddress, socket.id)
@@ -154,6 +157,8 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         p => p.walletAddress === payload.walletAddress.toLowerCase()
       )
 
+      const inVotePhase = game.status === 'voting' || game.status === 'tiebreak'
+
       // Send them current game state privately
       socket.emit('game:rejoined', {
         roomCode: game.roomCode,
@@ -170,6 +175,13 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
           isEliminated: p.isEliminated,
           hasSubmittedClue: p.hasSubmittedClue,
         })),
+        voteOptions: inVotePhase
+          ? Object.values(game.players)
+              .filter(p => !p.isEliminated)
+              .map(p => ({ walletAddress: p.walletAddress, displayName: p.displayName }))
+          : undefined,
+        voteTimeoutSeconds: VOTE_TIMEOUT / 1000,
+        phaseEndsAt: phaseEndTimes.get(game.roomCode) ?? null,
       })
 
       io.to(game.roomCode).emit('player:reconnected', {
@@ -459,9 +471,9 @@ function handleVoteComplete(io: Server, roomCode: string) {
       io.to(roomCode).emit('round:started', {
         roundNumber: updatedGame.currentRound,
         totalRounds: updatedGame.maxRounds,
-        timeoutSeconds: CLUE_TIMEOUT / 1000,
+        timeoutSeconds: updatedGame.discussionSeconds,
       })
-      setRoundTimer(io, roomCode, updatedGame.currentRound)
+      setRoundTimer(io, roomCode, updatedGame.currentRound, updatedGame.discussionSeconds * 1000)
     }, 4000)
     return
   }
@@ -506,6 +518,7 @@ function handleVoteComplete(io: Server, roomCode: string) {
 
 function setRoundTimer(io: Server, roomCode: string, roundNumber: number, timeoutMs = CLUE_TIMEOUT) {
   clearTimer(`${roomCode}:round:${roundNumber}`)
+  phaseEndTimes.set(roomCode, Date.now() + timeoutMs)
   const timer = setTimeout(() => {
     const game = GameManager.getGame(roomCode)
     if (!game || game.status !== 'active') return
@@ -516,6 +529,7 @@ function setRoundTimer(io: Server, roomCode: string, roundNumber: number, timeou
 
 function setVoteTimer(io: Server, roomCode: string) {
   clearTimer(`${roomCode}:vote`)
+  phaseEndTimes.set(roomCode, Date.now() + VOTE_TIMEOUT)
   const timer = setTimeout(() => {
     const game = GameManager.getGame(roomCode)
     if (!game) return

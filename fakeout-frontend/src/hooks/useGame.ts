@@ -161,6 +161,9 @@ export function useGame(walletAddress: string, displayName: string) {
       role: 'crewmate' | 'impostor'
       clues: unknown[]
       players: Array<{ walletAddress: string; displayName: string }>
+      voteOptions?: Array<{ walletAddress: string; displayName: string }>
+      voteTimeoutSeconds?: number
+      phaseEndsAt?: number | null
     }) => {
       const phase: GamePhase =
         data.status === 'lobby' ? 'lobby'
@@ -168,6 +171,10 @@ export function useGame(walletAddress: string, displayName: string) {
         : data.status === 'voting' || data.status === 'tiebreak' ? 'vote_phase'
         : data.status === 'completed' ? 'results'
         : 'lobby'
+
+      const remainingSeconds = data.phaseEndsAt
+        ? Math.max(0, Math.round((data.phaseEndsAt - Date.now()) / 1000))
+        : undefined
 
       patch({
         phase,
@@ -178,6 +185,15 @@ export function useGame(walletAddress: string, displayName: string) {
         players: data.players,
         currentRound: data.currentRound,
         totalRounds: data.maxRounds,
+        ...(data.voteOptions ? {
+          voteOptions: data.voteOptions,
+          voteTimeoutSeconds: remainingSeconds ?? data.voteTimeoutSeconds ?? 60,
+          hasVoted: false,
+          voteProgress: null,
+        } : {}),
+        ...(remainingSeconds !== undefined && phase === 'clue_phase' ? {
+          roundTimeoutSeconds: remainingSeconds,
+        } : {}),
       })
     })
 
@@ -324,15 +340,15 @@ export function useGame(walletAddress: string, displayName: string) {
       }))
     })
 
-    socket.on('player:reconnected', (data: { walletAddress: string }) => {
+    socket.on('player:reconnected', (data: { walletAddress: string; displayName: string }) => {
       setState(prev => ({
         ...prev,
-        lobbyPlayers: prev.lobbyPlayers.map(p =>
-          p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p
-        ),
-        players: prev.players.map(p =>
-          p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p
-        ),
+        lobbyPlayers: prev.lobbyPlayers.some(p => p.walletAddress === data.walletAddress)
+          ? prev.lobbyPlayers.map(p => p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p)
+          : [...prev.lobbyPlayers, { walletAddress: data.walletAddress, displayName: data.displayName, isHost: false, disconnected: false }],
+        players: prev.players.some(p => p.walletAddress === data.walletAddress)
+          ? prev.players.map(p => p.walletAddress === data.walletAddress ? { ...p, disconnected: false } : p)
+          : [...prev.players, { walletAddress: data.walletAddress, displayName: data.displayName, disconnected: false }],
       }))
     })
 
@@ -363,7 +379,7 @@ export function useGame(walletAddress: string, displayName: string) {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
-  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) => {
+  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) => {
     patch({ error: null })
     socketRef.current?.emit('game:create', {
       walletAddress: walletRef.current,
@@ -371,6 +387,7 @@ export function useGame(walletAddress: string, displayName: string) {
       type,
       stakeAmount,
       discussionSeconds,
+      impostorCount,
     })
   }, [displayName])
 

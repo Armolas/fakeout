@@ -58,9 +58,9 @@ export default function App() {
     }).catch(() => {})
   }
 
-  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number) {
+  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) {
     setDisplayName(name)
-    game.createGame(type, stakeAmount, discussionSeconds)
+    game.createGame(type, stakeAmount, discussionSeconds, impostorCount)
   }
 
   function handleJoinGame(_wallet: string, name: string, roomCode?: string) {
