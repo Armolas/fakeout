@@ -292,13 +292,14 @@ export function useGame(walletAddress: string, displayName: string) {
     // ── Vote events ───────────────────────────────────────────────────────────
     socket.on('vote:started', (data: VoteStartedPayload) => {
       patch({
-        phase: 'vote_phase',
+        phase: 'vote_announce',
         voteOptions: data.players,
         voteTimeoutSeconds: data.timeoutSeconds,
         hasVoted: false,
         voteProgress: null,
         tiebreakPlayers: null,
       })
+      setTimeout(() => patch({ phase: 'vote_phase' }), 3000)
     })
 
     socket.on('vote:accepted', () => {

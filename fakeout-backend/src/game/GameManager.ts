@@ -293,6 +293,16 @@ export const GameManager = {
     return { game }
   },
 
+  // ── Start a new discussion round after elimination (always active, ignores maxRounds) ───
+  startDiscussionRound(roomCode: string): Game {
+    const game = activeGames.get(roomCode)
+    if (!game) throw new Error('GAME_NOT_FOUND')
+    game.currentRound++
+    game.status = 'active'
+    game.clues.push({ roundNumber: game.currentRound, clues: [] })
+    return game
+  },
+
   // ── Advance to voting (single round, always goes to voting) ──────────────────
   advanceRound(roomCode: string): { game: Game; phase: 'next_round' | 'voting' } {
     const game = activeGames.get(roomCode)

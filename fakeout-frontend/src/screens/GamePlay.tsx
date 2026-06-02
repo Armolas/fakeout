@@ -61,6 +61,7 @@ export function GamePlay({
 }: Props) {
   const [timeLeft, setTimeLeft] = useState(roundTimeoutSeconds)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [announceCount, setAnnounceCount] = useState(3)
 
   useEffect(() => {
     if (phase === 'clue_phase') {
@@ -73,6 +74,14 @@ export function GamePlay({
     }
     return () => stopTimer()
   }, [phase]) // eslint-disable-line
+
+  // Countdown display during vote_announce
+  useEffect(() => {
+    if (phase !== 'vote_announce') return
+    setAnnounceCount(3)
+    const tick = setInterval(() => setAnnounceCount(n => Math.max(0, n - 1)), 1000)
+    return () => clearInterval(tick)
+  }, [phase])
 
   function startTimer(seconds: number) {
     stopTimer()
@@ -150,6 +159,20 @@ export function GamePlay({
           onTypingStop={onTypingStop}
           onReaction={onReaction}
         />
+      </div>
+    )
+  }
+
+  // ── Vote announce interstitial ─────────────────────────────────────────────
+  if (phase === 'vote_announce') {
+    return (
+      <div className="screen center-content">
+        <div className="vote-announce">
+          <div className="vote-announce-icon">🗳️</div>
+          <h2 className="vote-announce-title">Time to vote!</h2>
+          <p className="vote-announce-sub">Who do you think the impostor is?</p>
+          <div className="vote-announce-count">{announceCount}</div>
+        </div>
       </div>
     )
   }

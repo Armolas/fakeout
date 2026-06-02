@@ -671,6 +671,45 @@ body {
 .timer-warn { color: var(--danger); animation: blink 0.6s step-end infinite; }
 @keyframes blink { 50% { opacity: 0.35; } }
 
+/* ─── Vote announce ─────────────────────────────────────────────────────────── */
+.vote-announce {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: reveal-bounce 0.5s cubic-bezier(0.34, 1.6, 0.64, 1) both;
+}
+.vote-announce-icon {
+  font-size: 72px;
+  line-height: 1;
+  animation: icon-bob 1.2s ease-in-out infinite;
+}
+.vote-announce-title {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--ink);
+  text-align: center;
+}
+.vote-announce-sub {
+  color: var(--text-sub);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+.vote-announce-count {
+  font-size: 64px;
+  font-weight: 900;
+  font-family: var(--font-display);
+  color: var(--accent);
+  line-height: 1;
+  animation: count-pulse 1s ease-in-out infinite;
+}
+@keyframes count-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.15); opacity: 0.8; }
+}
+
 /* ─── Role reveal ───────────────────────────────────────────────────────────── */
 .role-reveal {
   display: flex;

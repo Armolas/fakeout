@@ -460,8 +460,7 @@ function handleVoteComplete(io: Server, roomCode: string) {
 
   if (!winResolution) {
     // Game continues — back to clue rounds
-    const { game: updatedGame } = GameManager.advanceRound(roomCode)
-    // Actually we go straight to new clue round after an elimination
+    const updatedGame = GameManager.startDiscussionRound(roomCode)
     io.to(roomCode).emit('player:eliminated', {
       walletAddress: game.players[resolution.eliminatedPlayerId!].walletAddress,
       displayName: game.players[resolution.eliminatedPlayerId!].displayName,

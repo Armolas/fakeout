@@ -104,6 +104,7 @@ export type GamePhase =
   | 'word_reveal'
   | 'clue_phase'
   | 'reviewing_clues'
+  | 'vote_announce'
   | 'vote_phase'
   | 'tiebreak'
   | 'eliminated_notice'
