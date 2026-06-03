@@ -213,7 +213,7 @@ export interface VoteUpdatedPayload {
 }
 
 export interface GameResultPayload {
-  outcome: 'crewmates_win' | 'impostor_wins'
+  outcome: 'crewmates_win' | 'impostor_wins' | 'draw'
   eliminatedPlayer: PublicPlayer | null
   impostors: PublicPlayer[]
   word: string
@@ -241,7 +241,7 @@ export interface ErrorPayload {
 // ─── Game Resolution ──────────────────────────────────────────────────────────
 
 export interface GameResolution {
-  outcome: 'crewmates_win' | 'impostor_wins'
+  outcome: 'crewmates_win' | 'impostor_wins' | 'draw'
   winners: string[]        // walletAddresses
   eliminatedPlayerId: string | null
   impostorIds: string[]

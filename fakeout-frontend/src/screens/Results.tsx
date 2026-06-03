@@ -12,6 +12,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
   const isWinner = result.winners.some(
     w => w.walletAddress.toLowerCase() === walletAddress.toLowerCase()
   )
+  const isDraw = result.outcome === 'draw'
   const crewmatesWin = result.outcome === 'crewmates_win'
   const perWinner = BigInt(result.perWinnerAmount ?? '0')
   const pot = BigInt(result.potAmount ?? '0')
@@ -21,7 +22,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
     <div className="screen center-content">
       <div className="results">
         {/* Outcome banner */}
-        <div className={`outcome-banner ${crewmatesWin ? 'crewmates-win' : 'impostor-wins'}`}>
+        <div className={`outcome-banner ${isDraw ? 'draw' : crewmatesWin ? 'crewmates-win' : 'impostor-wins'}`}>
           {isWinner && (
             <div className="confetti" aria-hidden="true">
               {['⭐','✨','🌟','💫','⚡','🎊'].map((s, i) => (
@@ -35,16 +36,19 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
               ))}
             </div>
           )}
-          <span className="outcome-icon">{crewmatesWin ? '🕵️' : '👁'}</span>
+          <span className="outcome-icon">{isDraw ? '🤝' : crewmatesWin ? '🕵️' : '👁'}</span>
           <h1 className="outcome-title">
-            {crewmatesWin ? 'Crewmates Win!' : 'Impostor Wins!'}
+            {isDraw ? "It's a Draw!" : crewmatesWin ? 'Crewmates Win!' : 'Impostor Wins!'}
           </h1>
           <p className="outcome-sub">
-            {isWinner ? 'You won!' : 'Better luck next time.'}
+            {isDraw
+              ? '3 tiebreaks with no result. Nobody wins.'
+              : isWinner ? 'You won!' : 'Better luck next time.'}
           </p>
         </div>
 
         {/* Your result */}
+        {!isDraw && (
         <div className={`personal-result ${isWinner ? 'winner' : 'loser'}`}>
           <span className="personal-icon">{isWinner ? '🏆' : '💀'}</span>
           <div>
@@ -56,6 +60,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
             )}
           </div>
         </div>
+        )}
 
         {/* The word */}
         <div className="reveal-box">

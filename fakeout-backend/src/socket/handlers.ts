@@ -441,6 +441,31 @@ function handleVoteComplete(io: Server, roomCode: string) {
   const game = GameManager.getGame(roomCode)
   if (!game) return
 
+  if (resolution.result === 'draw') {
+    const allPlayers = Object.values(game.players)
+    const impostors = allPlayers.filter(p => p.role === 'impostor').map(p => ({
+      walletAddress: p.walletAddress,
+      displayName: p.displayName,
+    }))
+    const drawResolution = {
+      outcome: 'draw' as const,
+      winners: [],
+      eliminatedPlayerId: null,
+      impostorIds: allPlayers.filter(p => p.role === 'impostor').map(p => p.playerId),
+    }
+    GameManager.completeGame(roomCode, drawResolution)
+    io.to(roomCode).emit('game:result', {
+      outcome: 'draw',
+      eliminatedPlayer: null,
+      impostors,
+      word: game.word,
+      winners: [],
+      potAmount: game.potAmount,
+      perWinnerAmount: '0',
+    })
+    return
+  }
+
   if (resolution.result === 'tiebreak') {
     // Sudden death round
     io.to(roomCode).emit('game:tiebreak', {
@@ -470,9 +495,9 @@ function handleVoteComplete(io: Server, roomCode: string) {
       io.to(roomCode).emit('round:started', {
         roundNumber: updatedGame.currentRound,
         totalRounds: updatedGame.maxRounds,
-        timeoutSeconds: updatedGame.discussionSeconds,
+        timeoutSeconds: 120,
       })
-      setRoundTimer(io, roomCode, updatedGame.currentRound, updatedGame.discussionSeconds * 1000)
+      setRoundTimer(io, roomCode, updatedGame.currentRound, 120 * 1000)
     }, 4000)
     return
   }

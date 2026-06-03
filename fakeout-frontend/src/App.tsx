@@ -121,6 +121,7 @@ export default function App() {
     phase === 'word_reveal' ||
     phase === 'clue_phase' ||
     phase === 'reviewing_clues' ||
+    phase === 'vote_announce' ||
     phase === 'vote_phase' ||
     phase === 'tiebreak' ||
     phase === 'eliminated_notice'

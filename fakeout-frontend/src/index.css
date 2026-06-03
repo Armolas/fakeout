@@ -929,6 +929,9 @@ body {
 .outcome-banner.impostor-wins {
   background: linear-gradient(160deg, #fff0f6 0%, #fff 50%, #fef3ff 100%);
 }
+.outcome-banner.draw {
+  background: linear-gradient(160deg, #f5f5f5 0%, #fff 50%, #f0f0f0 100%);
+}
 
 .outcome-icon  { font-size: 56px; line-height: 1; }
 .outcome-title { font-size: 28px; font-weight: 700; font-family: var(--font-display); color: var(--ink); }

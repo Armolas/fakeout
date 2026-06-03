@@ -311,7 +311,7 @@ export const GameManager = {
     if (game.currentRound >= game.maxRounds) {
       // Move to voting
       game.status = 'voting'
-      game.votes.push({ roundNumber: 1, votes: [], eliminated: null, isTie: false })
+      game.votes.push({ roundNumber: game.votes.length + 1, votes: [], eliminated: null, isTie: false })
       return { game, phase: 'voting' }
     }
 
@@ -376,7 +376,7 @@ export const GameManager = {
   // ── Resolve votes ────────────────────────────────────────────────────────────
   resolveVotes(roomCode: string): {
     game: Game
-    result: 'eliminated' | 'tiebreak'
+    result: 'eliminated' | 'tiebreak' | 'draw'
     eliminatedPlayerId?: string
     tiedPlayerIds?: string[]
   } {
@@ -406,6 +406,14 @@ export const GameManager = {
     // Tie
     if (topCandidates.length > 1) {
       currentVoteRound.isTie = true
+
+      // After 3 consecutive ties, end in a draw
+      const consecutiveTies = game.votes.filter(v => v.isTie).length
+      if (consecutiveTies >= 3) {
+        game.status = 'completed'
+        return { game, result: 'draw', tiedPlayerIds: topCandidates }
+      }
+
       game.status = 'tiebreak'
 
       // Add new tiebreak vote round — only tied players can be voted for

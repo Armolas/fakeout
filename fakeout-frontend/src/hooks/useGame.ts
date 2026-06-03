@@ -354,11 +354,12 @@ export function useGame(walletAddress: string, displayName: string) {
     })
 
     socket.on('player:eliminated', (data: PublicPlayer) => {
-      patch({
+      setState(prev => ({
+        ...prev,
         phase: 'eliminated_notice',
         eliminatedPlayer: data,
-        players: state.players.filter(p => p.walletAddress !== data.walletAddress),
-      })
+        players: prev.players.filter(p => p.walletAddress !== data.walletAddress),
+      }))
     })
 
     // ── Game result ───────────────────────────────────────────────────────────
