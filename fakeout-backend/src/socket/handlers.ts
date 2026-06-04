@@ -157,32 +157,39 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         p => p.walletAddress === payload.walletAddress.toLowerCase()
       )
 
-      const inVotePhase = game.status === 'voting' || game.status === 'tiebreak'
+      if (game.status === 'lobby') {
+        // Restore full lobby state — reuse the same event as the original join
+        socket.emit('game:joined', {
+          roomCode: game.roomCode,
+          lobby: serializeLobby(game),
+        })
+      } else {
+        const inVotePhase = game.status === 'voting' || game.status === 'tiebreak'
 
-      // Send them current game state privately
-      socket.emit('game:rejoined', {
-        roomCode: game.roomCode,
-        status: game.status,
-        currentRound: game.currentRound,
-        maxRounds: game.maxRounds,
-        word: player?.role === 'crewmate' ? game.word : 'IMPOSTOR',
-        hint: player?.role === 'impostor' ? game.hint : '',
-        role: player?.role,
-        clues: game.clues,
-        players: Object.values(game.players).map(p => ({
-          walletAddress: p.walletAddress,
-          displayName: p.displayName,
-          isEliminated: p.isEliminated,
-          hasSubmittedClue: p.hasSubmittedClue,
-        })),
-        voteOptions: inVotePhase
-          ? Object.values(game.players)
-              .filter(p => !p.isEliminated)
-              .map(p => ({ walletAddress: p.walletAddress, displayName: p.displayName }))
-          : undefined,
-        voteTimeoutSeconds: VOTE_TIMEOUT / 1000,
-        phaseEndsAt: phaseEndTimes.get(game.roomCode) ?? null,
-      })
+        socket.emit('game:rejoined', {
+          roomCode: game.roomCode,
+          status: game.status,
+          currentRound: game.currentRound,
+          maxRounds: game.maxRounds,
+          word: player?.role === 'crewmate' ? game.word : 'IMPOSTOR',
+          hint: player?.role === 'impostor' ? game.hint : '',
+          role: player?.role,
+          clues: game.clues,
+          players: Object.values(game.players).map(p => ({
+            walletAddress: p.walletAddress,
+            displayName: p.displayName,
+            isEliminated: p.isEliminated,
+            hasSubmittedClue: p.hasSubmittedClue,
+          })),
+          voteOptions: inVotePhase
+            ? Object.values(game.players)
+                .filter(p => !p.isEliminated)
+                .map(p => ({ walletAddress: p.walletAddress, displayName: p.displayName }))
+            : undefined,
+          voteTimeoutSeconds: VOTE_TIMEOUT / 1000,
+          phaseEndsAt: phaseEndTimes.get(game.roomCode) ?? null,
+        })
+      }
 
       io.to(game.roomCode).emit('player:reconnected', {
         walletAddress: payload.walletAddress,
@@ -197,6 +204,9 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
   socket.on('game:start', async (payload: StartGamePayload) => {
     try {
       const game = await GameManager.startGame(payload.roomCode, payload.hostWalletAddress)
+
+      // Set pot amount now that player count is final
+      game.potAmount = (BigInt(game.stakeAmount) * BigInt(Object.keys(game.players).length)).toString()
 
       // Send each player their private word assignment
       for (const player of Object.values(game.players)) {
@@ -330,7 +340,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       socket.emit('vote:accepted')
 
       // Broadcast vote count (anonymous — no names)
-      const eligibleVoters = Object.values(game.players).filter(p => !p.isEliminated)
+      const eligibleVoters = Object.values(game.players).filter(p => !p.isEliminated && !p.disconnected)
       const currentVoteRound = game.votes[game.votes.length - 1]
       io.to(payload.roomCode).emit('vote:updated', {
         votesIn: currentVoteRound.votes.length,
@@ -376,6 +386,8 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
     const game = GameManager.getGameByWallet(wallet)
     if (!game || game.status === 'completed') return
 
+    const disconnectedPlayer = Object.values(game.players).find(p => p.walletAddress === wallet)
+    if (disconnectedPlayer) disconnectedPlayer.disconnected = true
     io.to(game.roomCode).emit('player:disconnected', { walletAddress: wallet })
 
     // Give them RECONNECT_TIMEOUT_MS to reconnect before removing from lobby
@@ -437,9 +449,10 @@ function handleRoundComplete(io: Server, roomCode: string) {
 
 // ─── Vote complete handler ────────────────────────────────────────────────────
 function handleVoteComplete(io: Server, roomCode: string) {
-  const resolution = GameManager.resolveVotes(roomCode)
   const game = GameManager.getGame(roomCode)
-  if (!game) return
+  if (!game || game.status === 'completed') return
+
+  const resolution = GameManager.resolveVotes(roomCode)
 
   if (resolution.result === 'draw') {
     const allPlayers = Object.values(game.players)

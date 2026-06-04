@@ -13,7 +13,6 @@ import {
   players as playersTable,
   games as gamesTable,
   gamePlayers as gamePlayersTable,
-  clues as cluesTable,
   votes as votesTable,
 } from '../db/schema'
 
@@ -81,6 +80,7 @@ export const GameManager = {
       role: 'crewmate',
       hasSubmittedClue: false,
       isEliminated: false,
+      disconnected: false,
       socketId: '',
     }
 
@@ -183,6 +183,7 @@ export const GameManager = {
       role: 'crewmate',
       hasSubmittedClue: false,
       isEliminated: false,
+      disconnected: false,
       socketId: '',
     }
 
@@ -283,13 +284,6 @@ export const GameManager = {
       })
     }
 
-    await db.insert(cluesTable).values({
-      gameId: game.id,
-      playerId: player.playerId,
-      roundNumber: game.currentRound,
-      clueText: trimmed,
-    })
-
     return { game }
   },
 
@@ -311,6 +305,7 @@ export const GameManager = {
     if (game.currentRound >= game.maxRounds) {
       // Move to voting
       game.status = 'voting'
+      game.tiedPlayerIds = undefined
       game.votes.push({ roundNumber: game.votes.length + 1, votes: [], eliminated: null, isTie: false })
       return { game, phase: 'voting' }
     }
@@ -351,6 +346,13 @@ export const GameManager = {
     )
     if (alreadyVoted) throw new Error('ALREADY_VOTED')
 
+    // During tiebreak, only allow votes for the tied candidates
+    if (game.status === 'tiebreak' && game.tiedPlayerIds) {
+      if (!game.tiedPlayerIds.includes(votedFor.playerId)) {
+        throw new Error('INVALID_VOTE_TARGET')
+      }
+    }
+
     currentVoteRound.votes.push({
       voterId: voter.playerId,
       votedForId: votedFor.playerId,
@@ -364,8 +366,8 @@ export const GameManager = {
       voteRound: currentVoteRound.roundNumber,
     })
 
-    // Check if all active non-eliminated players voted
-    const eligibleVoters = Object.values(game.players).filter(p => !p.isEliminated)
+    // Check if all active non-eliminated, connected players voted
+    const eligibleVoters = Object.values(game.players).filter(p => !p.isEliminated && !p.disconnected)
     const allVoted = eligibleVoters.every(p =>
       currentVoteRound.votes.some(v => v.voterId === p.playerId)
     )
@@ -411,10 +413,12 @@ export const GameManager = {
       const consecutiveTies = game.votes.filter(v => v.isTie).length
       if (consecutiveTies >= 3) {
         game.status = 'completed'
+        game.tiedPlayerIds = undefined
         return { game, result: 'draw', tiedPlayerIds: topCandidates }
       }
 
       game.status = 'tiebreak'
+      game.tiedPlayerIds = topCandidates
 
       // Add new tiebreak vote round — only tied players can be voted for
       game.votes.push({
@@ -426,6 +430,9 @@ export const GameManager = {
 
       return { game, result: 'tiebreak', tiedPlayerIds: topCandidates }
     }
+
+    // Not a tie — clear any stored tiedPlayerIds
+    game.tiedPlayerIds = undefined
 
     // Eliminate
     const eliminatedId = topCandidates[0]
@@ -529,6 +536,7 @@ export const GameManager = {
     )
     if (player) {
       game.players[player.playerId].socketId = socketId
+      game.players[player.playerId].disconnected = false
     }
 
     return game

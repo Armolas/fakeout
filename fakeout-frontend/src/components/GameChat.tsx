@@ -105,6 +105,12 @@ export function GameChat({
     return () => container.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current)
+    }
+  }, [])
+
   function handleInputChange(value: string) {
     setText(value)
 

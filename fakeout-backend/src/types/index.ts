@@ -50,6 +50,7 @@ export interface GamePlayer {
   role: 'crewmate' | 'impostor'
   hasSubmittedClue: boolean
   isEliminated: boolean
+  disconnected: boolean
   socketId: string
 }
 
@@ -71,6 +72,7 @@ export interface Game {
   players: Record<string, GamePlayer>  // keyed by playerId
   clues: ClueRound[]
   votes: VoteRound[]
+  tiedPlayerIds?: string[]             // set during tiebreak, cleared after
   createdAt: Date
   completedAt?: Date
 }

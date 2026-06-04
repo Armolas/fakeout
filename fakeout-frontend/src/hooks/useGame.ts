@@ -88,6 +88,7 @@ export function useGame(walletAddress: string, displayName: string) {
   const [state, setState] = useState<GameState>(INITIAL_STATE)
   const socketRef = useRef<Socket | null>(null)
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const voteAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const walletRef = useRef(walletAddress)
   walletRef.current = walletAddress
   const stateRef = useRef(state)
@@ -96,6 +97,15 @@ export function useGame(walletAddress: string, displayName: string) {
   function patch(updates: Partial<GameState>) {
     setState(prev => ({ ...prev, ...updates }))
   }
+
+  // ── Persist roomCode across page refreshes ─────────────────────────────────
+  useEffect(() => {
+    if (state.roomCode) {
+      sessionStorage.setItem('fakeout_room', state.roomCode)
+    } else {
+      sessionStorage.removeItem('fakeout_room')
+    }
+  }, [state.roomCode])
 
   // ── Connect socket ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,10 +116,11 @@ export function useGame(walletAddress: string, displayName: string) {
 
     socket.on('connect', () => {
       patch({ connected: true, error: null })
-      // Auto-rejoin if we were mid-game when the connection dropped
+      // Auto-rejoin if we were mid-game or in a lobby when the connection dropped
       const { roomCode, phase } = stateRef.current
-      if (roomCode && phase !== 'idle' && phase !== 'results') {
-        socket.emit('game:rejoin', { walletAddress: walletRef.current })
+      const storedRoom = roomCode || sessionStorage.getItem('fakeout_room') || ''
+      if (storedRoom && phase !== 'results') {
+        socket.emit('game:rejoin', { walletAddress: walletRef.current, roomCode: storedRoom })
       }
     })
     socket.on('disconnect', () => patch({ connected: false }))
@@ -299,7 +310,11 @@ export function useGame(walletAddress: string, displayName: string) {
         voteProgress: null,
         tiebreakPlayers: null,
       })
-      setTimeout(() => patch({ phase: 'vote_phase' }), 3000)
+      if (voteAnnounceTimerRef.current) clearTimeout(voteAnnounceTimerRef.current)
+      voteAnnounceTimerRef.current = setTimeout(() => {
+        voteAnnounceTimerRef.current = null
+        patch({ phase: 'vote_phase' })
+      }, 3000)
     })
 
     socket.on('vote:accepted', () => {
@@ -311,6 +326,10 @@ export function useGame(walletAddress: string, displayName: string) {
     })
 
     socket.on('game:tiebreak', (data: TiebreakPayload) => {
+      if (voteAnnounceTimerRef.current) {
+        clearTimeout(voteAnnounceTimerRef.current)
+        voteAnnounceTimerRef.current = null
+      }
       patch({
         phase: 'tiebreak',
         tiebreakPlayers: data.tiedPlayers,
@@ -364,6 +383,11 @@ export function useGame(walletAddress: string, displayName: string) {
 
     // ── Game result ───────────────────────────────────────────────────────────
     socket.on('game:result', (data: GameResultPayload) => {
+      if (voteAnnounceTimerRef.current) {
+        clearTimeout(voteAnnounceTimerRef.current)
+        voteAnnounceTimerRef.current = null
+      }
+      sessionStorage.removeItem('fakeout_room')
       patch({ phase: 'results', result: data })
     })
 
@@ -375,6 +399,9 @@ export function useGame(walletAddress: string, displayName: string) {
     return () => {
       socket.disconnect()
       socketRef.current = null
+      if (voteAnnounceTimerRef.current) clearTimeout(voteAnnounceTimerRef.current)
+      typingTimeoutsRef.current.forEach(t => clearTimeout(t))
+      typingTimeoutsRef.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddress])
@@ -468,12 +495,13 @@ export function useGame(walletAddress: string, displayName: string) {
   const clearError = useCallback(() => patch({ error: null }), [])
 
   const resetGame = useCallback(() => {
-    if (state.roomCode && state.phase === 'lobby') {
+    if (state.roomCode && state.phase !== 'idle') {
       socketRef.current?.emit('game:leave', {
         walletAddress: walletRef.current,
         roomCode: state.roomCode,
       })
     }
+    sessionStorage.removeItem('fakeout_room')
     setState(INITIAL_STATE)
   }, [state.roomCode, state.phase])
 
