@@ -102,7 +102,7 @@ export function Home({
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: address ? [address, FAKEOUT_CONTRACT_ADDRESS] : undefined,
-    query: { enabled: !!address && BigInt(stakeAmount) > 0n },
+    query: { enabled: !!address },
   })
 
   const MAX_UINT256 = 2n ** 256n - 1n
@@ -154,15 +154,44 @@ export function Home({
     onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds, impostorCount)
   }
 
-  function handleJoin(code?: string) {
+  async function handleJoin(code?: string, knownStake?: string) {
     if (!address || !displayName.trim()) return
     const wallet = address.toLowerCase()
     const rc = code ?? roomCode
-    if (BigInt(stakeAmount) > 0n && !hasEnoughAllowance()) {
-      setNeedsApproval(true)
-      setPendingAction('join')
-      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
-      return
+
+    // Determine the actual stake of the game we're about to join
+    let targetStake = knownStake ?? '0'
+    if (!knownStake) {
+      if (rc) {
+        // Room-code join: fetch the lobby's actual stake amount
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/lobbies/${rc}`)
+          if (res.ok) {
+            const data = await res.json()
+            targetStake = data.stakeAmount ?? '0'
+          }
+        } catch { /* proceed without pre-check */ }
+      } else {
+        // Random join: fetch available public lobbies to check stake of first available game
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/lobbies`)
+          if (res.ok) {
+            const data = await res.json()
+            const first = (data.lobbies ?? [])[0]
+            if (first) targetStake = first.stakeAmount ?? '0'
+          }
+        } catch { /* proceed without pre-check */ }
+      }
+    }
+
+    if (BigInt(targetStake) > 0n) {
+      const currentAllowance = (allowance ?? 0n)
+      if (currentAllowance < BigInt(targetStake)) {
+        setNeedsApproval(true)
+        setPendingAction('join')
+        approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
+        return
+      }
     }
     onJoinGame(wallet, displayName, rc || undefined)
   }
@@ -570,7 +599,7 @@ export function Home({
                 <button
                   className="btn btn-primary btn-sm browse-join-btn"
                   disabled={!displayName.trim()}
-                  onClick={() => handleJoin(lobby.roomCode)}
+                  onClick={() => handleJoin(lobby.roomCode, lobby.stakeAmount)}
                 >
                   Join
                 </button>

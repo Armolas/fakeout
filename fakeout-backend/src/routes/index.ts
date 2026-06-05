@@ -18,6 +18,15 @@ router.get('/lobbies', (_req: Request, res: Response) => {
   res.json({ lobbies })
 })
 
+// GET /api/lobbies/:roomCode — get stake amount for a specific lobby (public or private)
+router.get('/lobbies/:roomCode', (req: Request, res: Response) => {
+  const game = GameManager.getGame(req.params.roomCode.toUpperCase())
+  if (!game || game.status !== 'lobby') {
+    return res.status(404).json({ error: 'Lobby not found' })
+  }
+  res.json({ roomCode: game.roomCode, stakeAmount: game.stakeAmount })
+})
+
 // GET /api/players/:walletAddress — player profile
 router.get('/players/:walletAddress', async (req: Request, res: Response) => {
   try {
