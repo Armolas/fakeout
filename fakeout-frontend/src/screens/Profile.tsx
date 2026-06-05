@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatUnits } from 'viem'
+import { ChevronLeft, ChevronRight, Check, Pencil } from 'lucide-react'
 import { useAccount, useBalance, useReadContract } from 'wagmi'
 import { GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { ERC20_ABI } from '../config/contracts'
@@ -70,7 +71,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
 
       {/* ── Top bar ───────────────────────────────────────────────────────── */}
       <div className="profile-topbar">
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}><ChevronLeft size={16} /> Back</button>
       </div>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -105,7 +106,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
               onClick={() => { setEditValue(displayName); setEditing(true) }}
               title="Edit name"
             >
-              ✏️
+              <Pencil size={14} />
             </button>
           </div>
         )}
@@ -115,7 +116,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
             {walletAddress.slice(0, 8)}…{walletAddress.slice(-6)}
           </span>
           <span className={`profile-copy-badge ${copied ? 'copied' : ''}`}>
-            {copied ? '✓ Copied' : 'Copy'}
+            {copied ? <><Check size={12} /> Copied</> : 'Copy'}
           </span>
         </button>
       </div>
@@ -209,7 +210,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
       <div className="profile-card">
         <button className="profile-disconnect" onClick={onDisconnect}>
           <span>Disconnect wallet</span>
-          <span className="profile-disconnect-arrow">→</span>
+          <ChevronRight size={16} className="profile-disconnect-arrow" />
         </button>
       </div>
 

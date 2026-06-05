@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useConnectors, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatUnits } from 'viem'
+import { ScanSearch, MessageCircle, Coins, KeyRound, Dices, Globe, Lock, Timer, Ghost, Sparkles, Moon, Target } from 'lucide-react'
 import { WALLET_ADAPTERS } from '@web3auth/base'
 import { web3AuthInstance } from '../config/web3auth'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
@@ -218,15 +219,15 @@ export function Home({
 
         <div className="connect-features">
           <div className="connect-feature">
-            <span className="connect-feature-icon">🕵️</span>
+            <span className="connect-feature-icon"><ScanSearch size={28} /></span>
             <span>Spot the impostor among your crew</span>
           </div>
           <div className="connect-feature">
-            <span className="connect-feature-icon">💬</span>
+            <span className="connect-feature-icon"><MessageCircle size={28} /></span>
             <span>Discuss, deceive, and debate live</span>
           </div>
           <div className="connect-feature">
-            <span className="connect-feature-icon">💰</span>
+            <span className="connect-feature-icon"><Coins size={28} /></span>
             <span>Stake G$ — winners take the pot</span>
           </div>
         </div>
@@ -359,8 +360,8 @@ export function Home({
               {isApprovalInFlight
                 ? <><span className="btn-spinner" />Approving G$…</>
                 : roomCode
-                  ? <>🔑 Join Private Game</>
-                  : <>🎲 Join Random Game</>}
+                  ? <><KeyRound size={16} /> Join Private Game</>
+                  : <><Dices size={16} /> Join Random Game</>}
             </button>
 
             {needsApproval && isApprovalInFlight && (
@@ -389,7 +390,7 @@ export function Home({
                   className={`type-option ${gameType === 'public' ? 'active' : ''}`}
                   onClick={() => setGameType('public')}
                 >
-                  <span className="type-option-icon">🌐</span>
+                  <Globe size={22} className="type-option-icon" />
                   <span className="type-option-name">Public</span>
                   <span className="type-option-desc">Anyone can join</span>
                 </button>
@@ -397,7 +398,7 @@ export function Home({
                   className={`type-option ${gameType === 'private' ? 'active' : ''}`}
                   onClick={() => setGameType('private')}
                 >
-                  <span className="type-option-icon">🔒</span>
+                  <Lock size={22} className="type-option-icon" />
                   <span className="type-option-name">Private</span>
                   <span className="type-option-desc">Invite only</span>
                 </button>
@@ -504,14 +505,14 @@ export function Home({
             </div>
 
             <div className="create-summary">
-              <span className="summary-chip">{gameType === 'public' ? '🌐 Public' : '🔒 Private'}</span>
-              <span className="summary-chip">⏱ {(discussionSeconds / 60).toFixed(discussionSeconds % 60 === 0 ? 0 : 1)} min</span>
+              <span className="summary-chip">{gameType === 'public' ? <><Globe size={12} /> Public</> : <><Lock size={12} /> Private</>}</span>
+              <span className="summary-chip"><Timer size={12} /> {(discussionSeconds / 60).toFixed(discussionSeconds % 60 === 0 ? 0 : 1)} min</span>
               <span className="summary-chip">
                 {stakeAmount === '0'
-                  ? '🆓 Free'
-                  : `💰 ${customStake ? `${customStakeInput} G$` : STAKE_OPTIONS.find(o => o.value === stakeAmount)?.label}`}
+                  ? 'Free'
+                  : <><Coins size={12} /> {customStake ? `${customStakeInput} G$` : STAKE_OPTIONS.find(o => o.value === stakeAmount)?.label}</>}
               </span>
-              <span className="summary-chip">🕵️ {impostorCount} impostor{impostorCount > 1 ? 's' : ''}</span>
+              <span className="summary-chip"><Ghost size={12} /> {impostorCount} impostor{impostorCount > 1 ? 's' : ''}</span>
             </div>
 
             <button
@@ -526,7 +527,7 @@ export function Home({
             >
               {isApprovalInFlight
                 ? <><span className="btn-spinner" />Approving G$…</>
-                : <>✨ Create Game</>}
+                : <><Sparkles size={16} /> Create Game</>}
             </button>
 
             {needsApproval && isApprovalInFlight && (
@@ -564,7 +565,7 @@ export function Home({
 
             {!loadingLobbies && lobbies.length === 0 && (
               <div className="browse-empty">
-                <span className="browse-empty-icon">🌙</span>
+                <Moon size={48} className="browse-empty-icon" />
                 <p>No open lobbies right now.</p>
                 <p className="muted">Switch to Create and start one!</p>
               </div>
@@ -580,11 +581,11 @@ export function Home({
                     </span>
                     {lobby.stakeAmount !== '0' && (
                       <span className="browse-badge browse-badge-gold">
-                        💰 {formatUnits(BigInt(lobby.stakeAmount), 18)} G$
+                        <Coins size={12} /> {formatUnits(BigInt(lobby.stakeAmount), 18)} G$
                       </span>
                     )}
                     {lobby.stakeAmount === '0' && (
-                      <span className="browse-badge browse-badge-free">🆓 Free</span>
+                      <span className="browse-badge browse-badge-free">Free</span>
                     )}
                   </div>
                   <div className="player-pips">
@@ -618,7 +619,7 @@ export function Home({
             onClick={() => { setTab(t); clearError() }}
           >
             <span className="home-nav-icon">
-              {t === 'join' ? '🎯' : t === 'create' ? '✨' : '🌐'}
+              {t === 'join' ? <Target size={20} /> : t === 'create' ? <Sparkles size={20} /> : <Globe size={20} />}
             </span>
             <span className="home-nav-label">
               {t.charAt(0).toUpperCase() + t.slice(1)}

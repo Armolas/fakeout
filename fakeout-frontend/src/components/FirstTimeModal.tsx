@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 
 interface Props {
   onConfirm: (name: string) => void
@@ -35,7 +36,7 @@ export function FirstTimeModal({ onConfirm }: Props) {
           disabled={!name.trim()}
           onClick={handleConfirm}
         >
-          Let's Play →
+          Let's Play <ArrowRight size={16} />
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { formatUnits } from 'viem'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { ChevronLeft } from 'lucide-react'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import type { LobbyPlayer } from '../types'
 
@@ -66,7 +67,7 @@ export function GameLobby({
 
       {/* ── Top bar ───────────────────────────────────────────────────────── */}
       <div className="lobby-topbar">
-        <button className="btn btn-ghost btn-sm" onClick={onLeave}>← Leave</button>
+        <button className="btn btn-ghost btn-sm" onClick={onLeave}><ChevronLeft size={16} /> Leave</button>
         <div className="lobby-meta">
           <span className="badge">{stakeLabel}</span>
           <span className="badge">{players.length}/10</span>

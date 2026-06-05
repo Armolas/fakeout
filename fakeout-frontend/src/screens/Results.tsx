@@ -1,4 +1,5 @@
 import { formatUnits } from 'viem'
+import { Handshake, ShieldCheck, Eye, Trophy, Skull } from 'lucide-react'
 import type { GameResultPayload } from '../types'
 
 interface Props {
@@ -36,7 +37,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
               ))}
             </div>
           )}
-          <span className="outcome-icon">{isDraw ? '🤝' : crewmatesWin ? '🕵️' : '👁'}</span>
+          <span className="outcome-icon">{isDraw ? <Handshake size={40} /> : crewmatesWin ? <ShieldCheck size={40} /> : <Eye size={40} />}</span>
           <h1 className="outcome-title">
             {isDraw ? "It's a Draw!" : crewmatesWin ? 'Crewmates Win!' : 'Impostor Wins!'}
           </h1>
@@ -50,7 +51,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
         {/* Your result */}
         {!isDraw && (
         <div className={`personal-result ${isWinner ? 'winner' : 'loser'}`}>
-          <span className="personal-icon">{isWinner ? '🏆' : '💀'}</span>
+          <span className="personal-icon">{isWinner ? <Trophy size={32} /> : <Skull size={32} />}</span>
           <div>
             <p className="personal-label">{isWinner ? 'Victory' : 'Defeat'}</p>
             {hasPrize && isWinner && (
@@ -90,7 +91,7 @@ export function Results({ result, walletAddress, role, onPlayAgain }: Props) {
             <div className="winner-list">
               {result.winners.map(p => (
                 <div key={p.walletAddress} className="winner-chip">
-                  <span>🏆</span>
+                  <Trophy size={14} />
                   <span>{p.displayName}</span>
                 </div>
               ))}

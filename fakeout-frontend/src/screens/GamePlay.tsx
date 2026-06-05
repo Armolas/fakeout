@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Eye, User, Vote, Zap, Check, ChevronRight, Skull } from 'lucide-react'
 import { GameChat } from '../components/GameChat'
 import type {
   ChatMessage,
@@ -111,7 +112,7 @@ export function GamePlay({
         <div className="role-reveal">
           {role === 'impostor' ? (
             <>
-              <div className="role-icon impostor">👁</div>
+              <div className="role-icon impostor"><Eye size={36} /></div>
               <h2 className="role-title">YOU ARE THE IMPOSTOR</h2>
               <p className="role-sub">You don't know the word. Blend in.</p>
               <div className="hint-box">
@@ -121,7 +122,7 @@ export function GamePlay({
             </>
           ) : (
             <>
-              <div className="role-icon crewmate">👤</div>
+              <div className="role-icon crewmate"><User size={36} /></div>
               <h2 className="role-title">YOU ARE A CREWMATE</h2>
               <p className="role-sub">Use the word to find the impostor.</p>
               <div className="word-box">
@@ -168,7 +169,7 @@ export function GamePlay({
     return (
       <div className="screen center-content">
         <div className="vote-announce">
-          <div className="vote-announce-icon">🗳️</div>
+          <div className="vote-announce-icon"><Vote size={48} /></div>
           <h2 className="vote-announce-title">Time to vote!</h2>
           <p className="vote-announce-sub">Who do you think the impostor is?</p>
           <div className="vote-announce-count">{announceCount}</div>
@@ -186,7 +187,7 @@ export function GamePlay({
       <div className="screen">
         <div className="game-header">
           <span className={`round-badge ${phase === 'tiebreak' ? 'tiebreak' : ''}`}>
-            {phase === 'tiebreak' ? '⚡ Tiebreak' : 'Vote'}
+            {phase === 'tiebreak' ? <><Zap size={14} /> Tiebreak</> : 'Vote'}
           </span>
           <Timer seconds={timeLeft} warn={timeLeft <= 10} />
         </div>
@@ -213,7 +214,7 @@ export function GamePlay({
 
         {hasVoted ? (
           <div className="submitted-notice">
-            <span className="check">✓</span>
+            <span className="check"><Check size={16} /></span>
             <span>Vote cast. Waiting for results…</span>
           </div>
         ) : (
@@ -228,7 +229,7 @@ export function GamePlay({
                 >
                   <div className="vote-avatar">{p.displayName[0]?.toUpperCase()}</div>
                   <span className="vote-name">{p.displayName}</span>
-                  <span className="vote-arrow">→</span>
+                  <span className="vote-arrow"><ChevronRight size={16} /></span>
                 </button>
               ))}
             {selfInOptions && (
@@ -246,7 +247,7 @@ export function GamePlay({
     return (
       <div className="screen center-content">
         <div className="eliminated-notice">
-          <div className="eliminated-icon">💀</div>
+          <div className="eliminated-icon"><Skull size={48} /></div>
           <h2>{eliminatedPlayer.displayName} was eliminated</h2>
           {isSelf && <p className="hint">You have been eliminated. Watch the rest of the game!</p>}
           <p className="muted">Next round starting…</p>

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import type { ThemePreference } from '../hooks/useTheme'
 
 interface Props {
@@ -5,10 +7,10 @@ interface Props {
   onChange: (theme: ThemePreference) => void
 }
 
-const OPTIONS: { value: ThemePreference; label: string; icon: string }[] = [
-  { value: 'light', label: 'Light', icon: '☀️' },
-  { value: 'dark', label: 'Dark', icon: '🌙' },
-  { value: 'system', label: 'Auto', icon: '◐' },
+const OPTIONS: { value: ThemePreference; label: string; icon: ReactNode }[] = [
+  { value: 'light', label: 'Light', icon: <Sun size={16} /> },
+  { value: 'dark', label: 'Dark', icon: <Moon size={16} /> },
+  { value: 'system', label: 'Auto', icon: <Monitor size={16} /> },
 ]
 
 export function ThemeToggle({ preference, onChange }: Props) {

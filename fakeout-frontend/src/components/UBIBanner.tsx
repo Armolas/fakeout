@@ -1,4 +1,5 @@
 import { formatUnits } from 'viem'
+import { IdCard, Gift, CheckCircle, Hourglass } from 'lucide-react'
 
 interface Props {
   entitlement: bigint
@@ -33,7 +34,7 @@ export function UBIBanner({
     return (
       <div className="ubi-banner ubi-banner--verify">
         <div className="ubi-info">
-          <span className="ubi-icon">🪪</span>
+          <span className="ubi-icon"><IdCard size={22} /></span>
           <div>
             <p className="ubi-title">Verify identity to claim G$</p>
             <p className="ubi-sub">GoodDollar requires a one-time face check</p>
@@ -50,7 +51,7 @@ export function UBIBanner({
     return (
       <div className="ubi-banner ubi-banner--ready">
         <div className="ubi-info">
-          <span className="ubi-icon">🎁</span>
+          <span className="ubi-icon"><Gift size={22} /></span>
           <div>
             <p className="ubi-title">Daily G$ available</p>
             <p className="ubi-amount">{parseFloat(formatUnits(entitlement, 18)).toFixed(2)} G$</p>
@@ -66,7 +67,7 @@ export function UBIBanner({
   if (claimSuccess && nextClaimTime) {
     return (
       <div className="ubi-banner ubi-banner--claimed">
-        <span className="ubi-icon">✓</span>
+        <span className="ubi-icon"><CheckCircle size={22} /></span>
         <p className="ubi-claimed-text">G$ claimed! Next in {hoursUntil(nextClaimTime)}</p>
       </div>
     )
@@ -75,7 +76,7 @@ export function UBIBanner({
   if (nextClaimTime) {
     return (
       <div className="ubi-banner ubi-banner--waiting">
-        <span className="ubi-icon">⏳</span>
+        <span className="ubi-icon"><Hourglass size={22} /></span>
         <p className="ubi-claimed-text">Next G$ claim in {hoursUntil(nextClaimTime)}</p>
       </div>
     )
