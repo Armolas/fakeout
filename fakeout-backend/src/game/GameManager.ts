@@ -108,9 +108,9 @@ export const GameManager = {
     activeGames.set(roomCode, game)
     playerGameMap.set(params.walletAddress.toLowerCase(), roomCode)
 
-    // Register on-chain (staked games only — free games need no contract)
+    // Register on-chain and join host as first player (staked games only)
     if (BigInt(params.stakeAmount) > 0n) {
-      contractService.createGame(gameId, params.stakeAmount)
+      contractService.createGame(gameId, params.stakeAmount, params.walletAddress.toLowerCase())
     }
 
     // Persist skeleton to DB

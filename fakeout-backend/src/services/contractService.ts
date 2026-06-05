@@ -68,20 +68,35 @@ export const contractService = {
   },
 
   /**
-   * Register a new game on-chain. Fire and forget.
+   * Register a new game on-chain, then immediately join the host as the first player.
+   * The host's stake is pulled atomically with the join. Fire and forget — awaits the
+   * createGame receipt before submitting joinGame so ordering is guaranteed.
    * Only called for staked games (stakeAmount > 0).
    */
-  createGame(gameId: string, stakeAmountWei: string): void {
+  createGame(gameId: string, stakeAmountWei: string, hostAddress: string): void {
     if (!clients) return
-    clients.send({
-      address: clients.contractAddress,
+    const c = clients
+    c.send({
+      address: c.contractAddress,
       abi: ABI,
       functionName: 'createGame',
       args: [uuidToBytes32(gameId), BigInt(stakeAmountWei)],
-    }).then(hash => {
+    })
+    .then(hash => {
       console.log(`[contract] createGame tx: ${hash}`)
-    }).catch(err => {
-      console.error(`[contract] createGame failed for ${gameId}:`, err.shortMessage ?? err.message)
+      return c.publicClient.waitForTransactionReceipt({ hash })
+    })
+    .then(() => c.send({
+      address: c.contractAddress,
+      abi: ABI,
+      functionName: 'joinGame',
+      args: [uuidToBytes32(gameId), hostAddress as Hex],
+    }))
+    .then(hash => {
+      console.log(`[contract] joinGame (host) tx: ${hash}`)
+    })
+    .catch(err => {
+      console.error(`[contract] createGame/joinGame (host) failed for ${gameId}:`, err.shortMessage ?? err.message)
     })
   },
 
