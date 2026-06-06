@@ -14,7 +14,7 @@ import {
 } from '../types'
 
 const VOTE_TIMEOUT = parseInt(process.env.VOTE_TIMEOUT_SECONDS || '60') * 1000
-const TURN_TIMEOUT_MS = 15_000
+const TURN_TIMEOUT_MS = 20_000
 const INITIAL_CHAT_BUFFER_MS = 90_000
 const POST_ELIM_CHAT_BUFFER_MS = 30_000
 
@@ -249,7 +249,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         io.to(game.roomCode).emit('round:started', {
           roundNumber: 1,
           totalRounds: updated.maxRounds,
-          timeoutSeconds: updated.describeRounds * updated.descriptionOrder.length * 15 + 90,
+          timeoutSeconds: updated.describeRounds * updated.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + 90,
           firstTurnWalletAddress: firstPlayer.walletAddress,
           firstTurnDisplayName: firstPlayer.displayName,
           totalInRound: updated.descriptionOrder.length,
@@ -262,7 +262,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
           totalDescribeRounds: updated.describeRounds,
           turnIndex: 0,
           totalInRound: updated.descriptionOrder.length,
-          timeoutSeconds: 15,
+          timeoutSeconds: TURN_TIMEOUT_MS / 1000,
         })
         setTurnTimer(io, game.roomCode)
       }, 3000) // 3s buffer after word reveal
@@ -388,7 +388,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
           totalDescribeRounds: game.currentRound === 1 ? game.describeRounds : 1,
           turnIndex: game.descriptionIndex,
           totalInRound: game.descriptionOrder.length,
-          timeoutSeconds: 15,
+          timeoutSeconds: TURN_TIMEOUT_MS / 1000,
         })
         setTurnTimer(io, payload.roomCode)
       }
@@ -594,7 +594,7 @@ function handleVoteComplete(io: Server, roomCode: string) {
       io.to(roomCode).emit('round:started', {
         roundNumber: refreshed.currentRound,
         totalRounds: refreshed.maxRounds,
-        timeoutSeconds: refreshed.descriptionOrder.length * 15 + 30,
+        timeoutSeconds: refreshed.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + 30,
         firstTurnWalletAddress: firstPlayer.walletAddress,
         firstTurnDisplayName: firstPlayer.displayName,
         totalInRound: refreshed.descriptionOrder.length,

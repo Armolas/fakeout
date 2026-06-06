@@ -81,7 +81,7 @@ export function GamePlay({
   const [chatOpen, setChatOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [describeInput, setDescribeInput] = useState('')
-  const [turnSecondsLeft, setTurnSecondsLeft] = useState(15)
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState(20)
   const [bufferSecondsLeft, setBufferSecondsLeft] = useState(chatBufferSeconds)
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const bufferTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -101,11 +101,11 @@ export function GamePlay({
     }
   }, [chatMessages.length, chatOpen])
 
-  // 15s per-turn countdown — reset on every new turn
+  // 20s per-turn countdown — reset on every new turn
   useEffect(() => {
     if (phase !== 'clue_phase') return
     if (!currentTurnWallet) return
-    setTurnSecondsLeft(15)
+    setTurnSecondsLeft(20)
     if (turnTimerRef.current) clearInterval(turnTimerRef.current)
     turnTimerRef.current = setInterval(() => {
       setTurnSecondsLeft(prev => {
@@ -308,7 +308,7 @@ export function GamePlay({
               <div className="describe-popup-timer-bar">
                 <div
                   className="describe-popup-timer-fill"
-                  style={{ width: `${(turnSecondsLeft / 15) * 100}%` }}
+                  style={{ width: `${(turnSecondsLeft / 20) * 100}%` }}
                   data-warn={turnSecondsLeft <= 5}
                 />
               </div>

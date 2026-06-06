@@ -18,7 +18,7 @@ const STEPS = [
   {
     icon: <MessageSquare size={18} />,
     title: 'Describe the word',
-    body: 'Players take turns in random order. You have 15 seconds to describe your word (or fake it convincingly).',
+    body: 'Players take turns in random order. You have 20 seconds to describe your word (or fake it convincingly).',
   },
   {
     icon: <MessageCircle size={18} />,
