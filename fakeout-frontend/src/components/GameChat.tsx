@@ -218,16 +218,12 @@ export function GameChat({
 
   return (
     <>
-      <div className="chat-word-bar">
-        {role === 'crewmate'
-          ? <span>Word: <strong>{word}</strong></span>
-          : <span>Hint: <strong>{hint}</strong> · Impostor</span>}
-      </div>
-
-      <div className="game-header">
-        <span className="round-badge">Discussion</span>
-        <Timer seconds={timeLeft} warn={timeLeft <= 10 && !isClosed} />
-      </div>
+      {timeLeft > 0 && (
+        <div className="game-header">
+          <span className="round-badge">Discussion</span>
+          <Timer seconds={timeLeft} warn={timeLeft <= 10 && !isClosed} />
+        </div>
+      )}
 
       {error && (
         <div className="error-banner" onClick={clearError}>{error}</div>
@@ -235,27 +231,6 @@ export function GameChat({
 
       <div className="chat-shell">
         <div className="chat-glass-panel">
-          <div className="chat-presence" aria-label="Players in discussion">
-            {players.map(p => {
-              const online = !p.disconnected
-              const isMe = p.walletAddress.toLowerCase() === walletAddress.toLowerCase()
-              return (
-                <div key={p.walletAddress} className="chat-presence-item">
-                  <div className="chat-presence-avatar">
-                    {p.displayName[0]?.toUpperCase() ?? '?'}
-                    <span
-                      className={`chat-presence-dot ${online ? '' : 'offline'}`}
-                      title={online ? 'Online' : 'Away'}
-                    />
-                  </div>
-                  <span className="chat-presence-name">
-                    {isMe ? 'You' : p.displayName}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-
           <div className="chat-scroll" ref={scrollRef} role="log" aria-live="polite">
             {messages.map((msg, i) => (
               <ChatMessageBubble

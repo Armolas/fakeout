@@ -242,7 +242,12 @@ export function useGame(walletAddress: string, displayName: string) {
         currentRound: data.roundNumber,
         totalRounds: data.totalRounds,
         roundTimeoutSeconds: data.timeoutSeconds,
-        chatMessages: [],
+        turnDescriptions: [],
+        currentTurnWallet: data.firstTurnWalletAddress,
+        describeRoundNumber: 1,
+        totalDescribeRounds: data.totalDescribeRounds,
+        totalInRound: data.totalInRound,
+        ...(data.roundNumber === 1 ? { chatMessages: [] } : {}),
         typingUsers: [],
       })
     })

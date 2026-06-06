@@ -142,29 +142,252 @@ export function GamePlay({
     const isClosed = phase === 'reviewing_clues'
 
     return (
-      <div className="screen chat-screen">
-        <GameChat
-          word={word}
-          hint={hint}
-          role={role}
-          players={players}
-          messages={chatMessages}
-          typingUsers={typingUsers}
-          walletAddress={walletAddress}
-          isClosed={isClosed}
-          timeLeft={isClosed ? 0 : timeLeft}
-          error={error}
-          clearError={clearError}
-          onSendMessage={onSendMessage}
-          onTyping={onTyping}
-          onTypingStop={onTypingStop}
-          onReaction={onReaction}
-        />
+      <div className="screen describe-screen">
+        {error && <div className="error-banner" onClick={clearError}>{error}</div>}
+
+        {/* Word chip */}
+        <div className="game-word-chip">
+          {role === 'impostor'
+            ? <><span className="game-word-chip-label">Your hint</span><strong>{hint}</strong></>
+            : <><span className="game-word-chip-label">Word</span><strong>{word}</strong></>}
+        </div>
+
+        {/* Round indicator */}
+        <div className="describe-round-header">
+          <span className="describe-round-label">
+            Round {describeRoundNumber}/{totalDescribeRounds}
+          </span>
+          <span className="describe-turn-label">
+            {currentDescriber ? `${currentDescriber.displayName} is describing` : 'Loading…'}
+            <span className="describe-turn-timer" data-warn={turnSecondsLeft <= 5}>
+              {turnSecondsLeft}s
+            </span>
+          </span>
+        </div>
+
+        {/* Player grid */}
+        <div className="describe-player-grid">
+          {players.map(p => {
+            const isActive = p.walletAddress.toLowerCase() === currentTurnWallet.toLowerCase()
+            const described = turnDescriptions.some(
+              d => d.walletAddress.toLowerCase() === p.walletAddress.toLowerCase()
+            )
+            const isEliminated = !voteOptions.length
+              ? false
+              : !voteOptions.some(v => v.walletAddress.toLowerCase() === p.walletAddress.toLowerCase())
+            return (
+              <div
+                key={p.walletAddress}
+                className={`describe-player-card ${isActive ? 'active' : ''} ${isEliminated ? 'eliminated' : ''}`}
+              >
+                <div className={`describe-player-avatar ${isActive ? 'pulsing' : ''}`}>
+                  {p.displayName[0]?.toUpperCase()}
+                </div>
+                <span className="describe-player-name">{p.displayName}</span>
+                {described && <span className="describe-player-check"><Check size={10} /></span>}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Descriptions feed */}
+        <div className="describe-feed">
+          {turnDescriptions.length === 0 ? (
+            <p className="describe-feed-empty">Waiting for the first description…</p>
+          ) : (
+            turnDescriptions.map((d, i) => (
+              <div key={i} className={`describe-entry ${d.skipped ? 'skipped' : ''}`}>
+                <span className="describe-entry-avatar">{d.displayName[0]?.toUpperCase()}</span>
+                <span className="describe-entry-name">{d.displayName}</span>
+                <span className="describe-entry-text">
+                  {d.skipped ? <em>(skipped)</em> : `"${d.text}"`}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Floating chat button — hidden while drawer is open */}
+        {!chatOpen && (
+          <button
+            className="chat-fab"
+            onClick={() => { setChatOpen(true); setUnreadCount(0) }}
+          >
+            <MessageCircle size={22} />
+            {unreadCount > 0 && <span className="chat-fab-badge">{unreadCount}</span>}
+          </button>
+        )}
+
+        {/* Chat drawer */}
+        {chatOpen && (
+          <div className="chat-drawer">
+            <div className="chat-drawer-header">
+              <span>Chat</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setChatOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <GameChat
+              word={word}
+              hint={hint}
+              role={role}
+              players={players}
+              messages={chatMessages}
+              typingUsers={typingUsers}
+              walletAddress={walletAddress}
+              isClosed={false}
+              timeLeft={0}
+              error={null}
+              clearError={clearError}
+              onSendMessage={onSendMessage}
+              onTyping={onTyping}
+              onTypingStop={onTypingStop}
+              onReaction={onReaction}
+            />
+          </div>
+        )}
+
+        {/* Your turn popup — locked, cannot dismiss */}
+        {isMyTurn && (
+          <div className="describe-overlay">
+            <div className="describe-popup">
+              {/* Timer bar */}
+              <div className="describe-popup-timer-bar">
+                <div
+                  className="describe-popup-timer-fill"
+                  style={{ width: `${(turnSecondsLeft / 15) * 100}%` }}
+                  data-warn={turnSecondsLeft <= 5}
+                />
+              </div>
+
+              <h3 className="describe-popup-title">Your turn to describe!</h3>
+              <p className="describe-popup-countdown" data-warn={turnSecondsLeft <= 5}>
+                {turnSecondsLeft}s
+              </p>
+
+              {role === 'impostor' ? (
+                <div className="describe-popup-word impostor">
+                  <span className="describe-popup-word-label">Your hint</span>
+                  <span className="describe-popup-word-value">{hint}</span>
+                  <p className="describe-popup-word-note">You don't know the real word — blend in</p>
+                </div>
+              ) : (
+                <div className="describe-popup-word crewmate">
+                  <span className="describe-popup-word-label">The word is</span>
+                  <span className="describe-popup-word-value">{word}</span>
+                </div>
+              )}
+
+              <textarea
+                className="describe-popup-input"
+                placeholder="Type your description…"
+                maxLength={120}
+                value={describeInput}
+                autoFocus
+                onChange={e => setDescribeInput(e.target.value)}
+              />
+              <p className="describe-popup-charcount">{describeInput.length}/120</p>
+
+              <button
+                className="btn btn-primary btn-lg describe-popup-submit"
+                disabled={!describeInput.trim()}
+                onClick={() => {
+                  onSubmitDescription(describeInput.trim())
+                  setDescribeInput('')
+                }}
+              >
+                Submit
+              </button>
+
+              <p className="describe-popup-hint">
+                Turn {currentTurnIndex + 1} of {totalInRound}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
-  // ── Vote announce interstitial ─────────────────────────────────────────────
+  // ── Chat buffer phase ────────────────────────────────────────────────────────
+  if (phase === 'chat_buffer') {
+    return (
+      <div className="screen describe-screen">
+        {/* Word chip */}
+        <div className="game-word-chip">
+          {role === 'impostor'
+            ? <><span className="game-word-chip-label">Your hint</span><strong>{hint}</strong></>
+            : <><span className="game-word-chip-label">Word</span><strong>{word}</strong></>}
+        </div>
+
+        {/* Buffer banner */}
+        <div className="chat-buffer-banner">
+          <MessageCircle size={16} />
+          <span>Open discussion</span>
+          <span className="chat-buffer-timer">{bufferSecondsLeft}s</span>
+        </div>
+
+        {/* Descriptions summary (read-only) */}
+        <div className="describe-feed describe-feed-summary">
+          {turnDescriptions.length === 0 ? (
+            <p className="describe-feed-empty">No descriptions were submitted.</p>
+          ) : (
+            turnDescriptions.map((d, i) => (
+              <div key={i} className={`describe-entry ${d.skipped ? 'skipped' : ''}`}>
+                <span className="describe-entry-avatar">{d.displayName[0]?.toUpperCase()}</span>
+                <span className="describe-entry-name">{d.displayName}</span>
+                <span className="describe-entry-text">
+                  {d.skipped ? <em>(skipped)</em> : `"${d.text}"`}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Floating chat button — hidden while drawer is open */}
+        {!chatOpen && (
+          <button
+            className="chat-fab"
+            onClick={() => { setChatOpen(true); setUnreadCount(0) }}
+          >
+            <MessageCircle size={22} />
+            {unreadCount > 0 && <span className="chat-fab-badge">{unreadCount}</span>}
+          </button>
+        )}
+
+        {/* Full-height chat drawer */}
+        {chatOpen && (
+          <div className="chat-drawer">
+            <div className="chat-drawer-header">
+              <span>Chat</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setChatOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <GameChat
+              word={word}
+              hint={hint}
+              role={role}
+              players={players}
+              messages={chatMessages}
+              typingUsers={typingUsers}
+              walletAddress={walletAddress}
+              isClosed={false}
+              timeLeft={0}
+              error={error}
+              clearError={clearError}
+              onSendMessage={onSendMessage}
+              onTyping={onTyping}
+              onTypingStop={onTypingStop}
+              onReaction={onReaction}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Vote announce interstitial ───────────────────────────────────────────────
   if (phase === 'vote_announce') {
     return (
       <div className="screen center-content">

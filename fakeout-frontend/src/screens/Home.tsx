@@ -5,12 +5,13 @@
 import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useConnectors, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatUnits } from 'viem'
-import { ScanSearch, MessageCircle, Coins, KeyRound, Dices, Globe, Lock, Timer, Ghost, Sparkles, Moon, Target } from 'lucide-react'
+import { ScanSearch, MessageCircle, Coins, KeyRound, Dices, Globe, Lock, Timer, Ghost, Sparkles, Moon, Target, HelpCircle } from 'lucide-react'
 import { WALLET_ADAPTERS } from '@web3auth/base'
 import { web3AuthInstance } from '../config/web3auth'
 import { ERC20_ABI, FAKEOUT_CONTRACT_ADDRESS, GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { UBIBanner } from '../components/UBIBanner'
 import { IdentityVerificationModal } from '../components/IdentityVerificationModal'
+import { HowToPlayModal } from '../components/HowToPlayModal'
 import { useUBIClaim } from '../hooks/useUBIClaim'
 import { useIdentityVerification } from '../hooks/useIdentityVerification'
 import type { PublicLobby } from '../types'
@@ -75,6 +76,7 @@ export function Home({
     connect({ connector })
   }
 
+  const [showHowToPlay, setShowHowToPlay] = useState(false)
   const [tab, setTab] = useState<Tab>('join')
   const [roomCode, setRoomCode] = useState('')
   const [gameType, setGameType] = useState<'public' | 'private'>('public')
@@ -211,6 +213,7 @@ export function Home({
   if (!isConnected) {
     return (
       <div className="screen center-content connect-screen">
+        {showHowToPlay && <HowToPlayModal onClose={() => setShowHowToPlay(false)} />}
         <div className="connect-hero">
           <img src="/icons/icon-192.png" alt="FAKEOUT" className="connect-logo" />
           <h1 className="connect-title">FAKEOUT</h1>
@@ -273,6 +276,10 @@ export function Home({
           </button>
         </div>
 
+        <button className="btn btn-ghost howtoplay-link" onClick={() => setShowHowToPlay(true)}>
+          <HelpCircle size={14} /> How to play?
+        </button>
+
         <p className="connect-footer">By continuing you agree to our terms of service.</p>
       </div>
     )
@@ -281,6 +288,7 @@ export function Home({
   // ── Main home screen ────────────────────────────────────────────────────────
   return (
     <div className="screen home-screen">
+      {showHowToPlay && <HowToPlayModal onClose={() => setShowHowToPlay(false)} />}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="home-header">
@@ -288,6 +296,9 @@ export function Home({
           <img src="/icons/icon-192.png" alt="FAKEOUT" className="logo-img-sm" />
         </div>
         <div className="home-header-right">
+          <button className="btn btn-ghost btn-sm howtoplay-trigger" onClick={() => setShowHowToPlay(true)} title="How to play">
+            <HelpCircle size={18} />
+          </button>
           {balance !== undefined && (
             <span className="balance-badge">
               <span className="balance-dot" />
