@@ -33,7 +33,7 @@ export interface LobbyState {
   roomCode: string
   type: GameType
   stakeAmount: string
-  discussionSeconds: number
+  describeRounds: number
   hostWalletAddress: string
   players: LobbyPlayer[]
 }
@@ -51,6 +51,39 @@ export interface RoundStartedPayload {
   roundNumber: number
   totalRounds: number
   timeoutSeconds: number
+  firstTurnWalletAddress: string
+  firstTurnDisplayName: string
+  totalInRound: number
+  totalDescribeRounds: number
+}
+
+export interface TurnDescription {
+  walletAddress: string
+  displayName: string
+  text: string
+  skipped?: boolean
+}
+
+export interface TurnStartedPayload {
+  playerWalletAddress: string
+  displayName: string
+  describeRoundNumber: number
+  totalDescribeRounds: number
+  turnIndex: number
+  totalInRound: number
+  timeoutSeconds: number
+}
+
+export interface DescriptionRevealedPayload {
+  walletAddress: string
+  displayName: string
+  text: string
+  turnIndex: number
+  skipped?: boolean
+}
+
+export interface ChatBufferStartedPayload {
+  seconds: number
 }
 
 export interface RoundCluesPayload {
@@ -103,7 +136,7 @@ export type GamePhase =
   | 'lobby'
   | 'word_reveal'
   | 'clue_phase'
-  | 'reviewing_clues'
+  | 'chat_buffer'
   | 'vote_announce'
   | 'vote_phase'
   | 'tiebreak'

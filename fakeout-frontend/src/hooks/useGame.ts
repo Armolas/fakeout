@@ -8,6 +8,7 @@ import type {
   LobbyState,
   PublicPlayer,
   TiebreakPayload,
+  TurnDescription,
   TypingUser,
   VoteStartedPayload,
 } from '../types'
@@ -24,7 +25,7 @@ interface GameState {
   // Lobby
   roomCode: string
   stakeAmount: string
-  discussionSeconds: number
+  describeRounds: number
   lobbyPlayers: LobbyPlayer[]
   hostWalletAddress: string
 
@@ -36,8 +37,19 @@ interface GameState {
   totalRounds: number
   currentRound: number
 
-  // Discussion phase
+  // Description phase
   roundTimeoutSeconds: number
+  currentTurnWallet: string
+  currentTurnIndex: number
+  describeRoundNumber: number
+  totalDescribeRounds: number
+  totalInRound: number
+  turnDescriptions: TurnDescription[]
+
+  // Chat buffer phase
+  chatBufferSeconds: number
+
+  // Chat
   chatMessages: ChatMessage[]
   typingUsers: TypingUser[]
 
@@ -61,7 +73,7 @@ const INITIAL_STATE: GameState = {
   error: null,
   roomCode: '',
   stakeAmount: '0',
-  discussionSeconds: 120,
+  describeRounds: 1,
   lobbyPlayers: [],
   hostWalletAddress: '',
   role: null,
@@ -71,6 +83,13 @@ const INITIAL_STATE: GameState = {
   totalRounds: 1,
   currentRound: 1,
   roundTimeoutSeconds: 120,
+  currentTurnWallet: '',
+  currentTurnIndex: 0,
+  describeRoundNumber: 0,
+  totalDescribeRounds: 1,
+  totalInRound: 0,
+  turnDescriptions: [],
+  chatBufferSeconds: 90,
   chatMessages: [],
   typingUsers: [],
   hasVoted: false,
@@ -116,7 +135,6 @@ export function useGame(walletAddress: string, displayName: string) {
 
     socket.on('connect', () => {
       patch({ connected: true, error: null })
-      // Auto-rejoin if we were mid-game or in a lobby when the connection dropped
       const { roomCode, phase } = stateRef.current
       const storedRoom = roomCode || sessionStorage.getItem('fakeout_room') || ''
       if (storedRoom && phase !== 'results') {
@@ -134,7 +152,7 @@ export function useGame(walletAddress: string, displayName: string) {
         phase: 'lobby',
         roomCode,
         stakeAmount: lobby.stakeAmount,
-        discussionSeconds: lobby.discussionSeconds,
+        describeRounds: lobby.describeRounds,
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         error: null,
@@ -146,7 +164,7 @@ export function useGame(walletAddress: string, displayName: string) {
         phase: 'lobby',
         roomCode,
         stakeAmount: lobby.stakeAmount,
-        discussionSeconds: lobby.discussionSeconds,
+        describeRounds: lobby.describeRounds,
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         error: null,
@@ -158,7 +176,7 @@ export function useGame(walletAddress: string, displayName: string) {
         lobbyPlayers: lobby.players,
         hostWalletAddress: lobby.hostWalletAddress,
         stakeAmount: lobby.stakeAmount,
-        discussionSeconds: lobby.discussionSeconds,
+        describeRounds: lobby.describeRounds,
       })
     })
 
@@ -167,11 +185,15 @@ export function useGame(walletAddress: string, displayName: string) {
       status: string
       currentRound: number
       maxRounds: number
+      describeRounds: number
+      currentDescribeRound: number
       word: string
       hint: string
       role: 'crewmate' | 'impostor'
       clues: unknown[]
       players: Array<{ walletAddress: string; displayName: string }>
+      descriptions?: Array<{ walletAddress: string; displayName: string; text: string }>
+      currentTurnWalletAddress?: string | null
       voteOptions?: Array<{ walletAddress: string; displayName: string }>
       voteTimeoutSeconds?: number
       phaseEndsAt?: number | null
@@ -196,6 +218,10 @@ export function useGame(walletAddress: string, displayName: string) {
         players: data.players,
         currentRound: data.currentRound,
         totalRounds: data.maxRounds,
+        describeRounds: data.describeRounds,
+        describeRoundNumber: data.currentDescribeRound,
+        turnDescriptions: data.descriptions ?? [],
+        currentTurnWallet: data.currentTurnWalletAddress ?? '',
         ...(data.voteOptions ? {
           voteOptions: data.voteOptions,
           voteTimeoutSeconds: remainingSeconds ?? data.voteTimeoutSeconds ?? 60,
@@ -232,11 +258,22 @@ export function useGame(walletAddress: string, displayName: string) {
         tiebreakPlayers: null,
         eliminatedPlayer: null,
         result: null,
+        turnDescriptions: [],
+        currentTurnWallet: '',
+        describeRoundNumber: 0,
       })
     })
 
     // ── Round events ──────────────────────────────────────────────────────────
-    socket.on('round:started', (data: { roundNumber: number; totalRounds: number; timeoutSeconds: number }) => {
+    socket.on('round:started', (data: {
+      roundNumber: number
+      totalRounds: number
+      timeoutSeconds: number
+      firstTurnWalletAddress: string
+      firstTurnDisplayName: string
+      totalInRound: number
+      totalDescribeRounds: number
+    }) => {
       patch({
         phase: 'clue_phase',
         currentRound: data.roundNumber,
@@ -250,6 +287,46 @@ export function useGame(walletAddress: string, displayName: string) {
         ...(data.roundNumber === 1 ? { chatMessages: [] } : {}),
         typingUsers: [],
       })
+    })
+
+    socket.on('turn:started', (data: {
+      playerWalletAddress: string
+      displayName: string
+      describeRoundNumber: number
+      totalDescribeRounds: number
+      turnIndex: number
+      totalInRound: number
+      timeoutSeconds: number
+    }) => {
+      patch({
+        currentTurnWallet: data.playerWalletAddress,
+        currentTurnIndex: data.turnIndex,
+        describeRoundNumber: data.describeRoundNumber,
+        totalDescribeRounds: data.totalDescribeRounds,
+        totalInRound: data.totalInRound,
+      })
+    })
+
+    socket.on('description:revealed', (data: {
+      walletAddress: string
+      displayName: string
+      text: string
+      turnIndex: number
+      skipped?: boolean
+    }) => {
+      setState(prev => ({
+        ...prev,
+        turnDescriptions: [...prev.turnDescriptions, {
+          walletAddress: data.walletAddress,
+          displayName: data.displayName,
+          text: data.text,
+          skipped: data.skipped,
+        }],
+      }))
+    })
+
+    socket.on('chat:buffer_started', (data: { seconds: number }) => {
+      patch({ phase: 'chat_buffer', chatBufferSeconds: data.seconds })
     })
 
     socket.on('chat:message', (data: ChatMessage) => {
@@ -413,14 +490,14 @@ export function useGame(walletAddress: string, displayName: string) {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
-  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) => {
+  const createGame = useCallback((type: 'public' | 'private', stakeAmount: string, describeRounds: number, impostorCount: number) => {
     patch({ error: null })
     socketRef.current?.emit('game:create', {
       walletAddress: walletRef.current,
       displayName,
       type,
       stakeAmount,
-      discussionSeconds,
+      describeRounds,
       impostorCount,
     })
   }, [displayName])
@@ -488,6 +565,15 @@ export function useGame(walletAddress: string, displayName: string) {
     })
   }, [state.roomCode])
 
+  const submitDescription = useCallback((text: string) => {
+    patch({ error: null })
+    socketRef.current?.emit('description:submit', {
+      roomCode: state.roomCode,
+      walletAddress: walletRef.current,
+      text,
+    })
+  }, [state.roomCode])
+
   const submitVote = useCallback((votedForWalletAddress: string) => {
     patch({ error: null })
     socketRef.current?.emit('vote:submit', {
@@ -521,6 +607,7 @@ export function useGame(walletAddress: string, displayName: string) {
     sendTyping,
     sendTypingStop,
     sendReaction,
+    submitDescription,
     submitVote,
     clearError,
     resetGame,

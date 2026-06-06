@@ -13,11 +13,15 @@ import {
   Game,
 } from '../types'
 
-const CLUE_TIMEOUT = parseInt(process.env.CLUE_TIMEOUT_SECONDS || '60') * 1000
 const VOTE_TIMEOUT = parseInt(process.env.VOTE_TIMEOUT_SECONDS || '60') * 1000
+const TURN_TIMEOUT_MS = 15_000
+const INITIAL_CHAT_BUFFER_MS = 90_000
+const POST_ELIM_CHAT_BUFFER_MS = 30_000
 
-// Track round timers so we can clear them
+// Track timers
 const roundTimers = new Map<string, NodeJS.Timeout>()
+const turnTimers = new Map<string, NodeJS.Timeout>()
+const chatBufferTimers = new Map<string, NodeJS.Timeout>()
 // Track phase end times for reconnecting players (roomCode → unix ms)
 const phaseEndTimes = new Map<string, number>()
 
@@ -59,7 +63,7 @@ function serializeLobby(game: Game) {
     roomCode: game.roomCode,
     type: game.type,
     stakeAmount: game.stakeAmount,
-    discussionSeconds: game.discussionSeconds,
+    describeRounds: game.describeRounds,
     hostWalletAddress: Object.values(game.players).find(
       p => p.playerId === game.createdBy
     )?.walletAddress,
@@ -82,7 +86,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         displayName: payload.displayName,
         type: payload.type,
         stakeAmount: payload.stakeAmount,
-        discussionSeconds: payload.discussionSeconds ?? 120,
+        describeRounds: payload.describeRounds ?? 1,
         impostorCount: payload.impostorCount ?? 1,
       })
 
@@ -166,11 +170,15 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       } else {
         const inVotePhase = game.status === 'voting' || game.status === 'tiebreak'
 
+        const currentDescriberId = game.descriptionOrder[game.descriptionIndex]
+        const currentDescriber = currentDescriberId ? game.players[currentDescriberId] : null
         socket.emit('game:rejoined', {
           roomCode: game.roomCode,
           status: game.status,
           currentRound: game.currentRound,
           maxRounds: game.maxRounds,
+          describeRounds: game.describeRounds,
+          currentDescribeRound: game.currentDescribeRound,
           word: player?.role === 'crewmate' ? game.word : 'IMPOSTOR',
           hint: player?.role === 'impostor' ? game.hint : '',
           role: player?.role,
@@ -181,6 +189,12 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
             isEliminated: p.isEliminated,
             hasSubmittedClue: p.hasSubmittedClue,
           })),
+          descriptions: game.descriptions.map(d => ({
+            walletAddress: d.walletAddress,
+            displayName: d.displayName,
+            text: d.text,
+          })),
+          currentTurnWalletAddress: currentDescriber?.walletAddress ?? null,
           voteOptions: inVotePhase
             ? Object.values(game.players)
                 .filter(p => !p.isEliminated)
@@ -228,16 +242,29 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         })
       }
 
-      // Start round 1
+      // Start round 1 after word reveal
       setTimeout(() => {
+        const { firstPlayer } = GameManager.startDescribeRound(game.roomCode)
+        const updated = GameManager.getGame(game.roomCode)!
         io.to(game.roomCode).emit('round:started', {
           roundNumber: 1,
-          totalRounds: game.maxRounds,
-          timeoutSeconds: game.discussionSeconds,
+          totalRounds: updated.maxRounds,
+          timeoutSeconds: updated.describeRounds * updated.descriptionOrder.length * 15 + 90,
+          firstTurnWalletAddress: firstPlayer.walletAddress,
+          firstTurnDisplayName: firstPlayer.displayName,
+          totalInRound: updated.descriptionOrder.length,
+          totalDescribeRounds: updated.describeRounds,
         })
-
-        // Auto-advance when discussion timer expires
-        setRoundTimer(io, game.roomCode, 1, game.discussionSeconds * 1000)
+        io.to(game.roomCode).emit('turn:started', {
+          playerWalletAddress: firstPlayer.walletAddress,
+          displayName: firstPlayer.displayName,
+          describeRoundNumber: 1,
+          totalDescribeRounds: updated.describeRounds,
+          turnIndex: 0,
+          totalInRound: updated.descriptionOrder.length,
+          timeoutSeconds: 15,
+        })
+        setTurnTimer(io, game.roomCode)
       }, 3000) // 3s buffer after word reveal
 
       if (game.type === 'public') {
@@ -328,6 +355,48 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
     })
   })
 
+  // ── description:submit ───────────────────────────────────────────────────────
+  socket.on('description:submit', async (payload: { roomCode: string; walletAddress: string; text: string }) => {
+    try {
+      const existing = turnTimers.get(payload.roomCode)
+      if (existing) { clearTimeout(existing); turnTimers.delete(payload.roomCode) }
+
+      const { game, isRoundComplete, nextPlayer } = GameManager.submitDescription({
+        roomCode: payload.roomCode,
+        walletAddress: payload.walletAddress,
+        text: payload.text,
+      })
+
+      const sender = Object.values(game.players).find(
+        p => p.walletAddress === payload.walletAddress.toLowerCase()
+      )!
+
+      io.to(payload.roomCode).emit('description:revealed', {
+        walletAddress: payload.walletAddress.toLowerCase(),
+        displayName: sender.displayName,
+        text: payload.text.trim(),
+        turnIndex: game.descriptionIndex - 1,
+      })
+
+      if (isRoundComplete) {
+        handleDescribeRoundComplete(io, payload.roomCode)
+      } else {
+        io.to(payload.roomCode).emit('turn:started', {
+          playerWalletAddress: nextPlayer!.walletAddress,
+          displayName: nextPlayer!.displayName,
+          describeRoundNumber: game.currentDescribeRound,
+          totalDescribeRounds: game.currentRound === 1 ? game.describeRounds : 1,
+          turnIndex: game.descriptionIndex,
+          totalInRound: game.descriptionOrder.length,
+          timeoutSeconds: 15,
+        })
+        setTurnTimer(io, payload.roomCode)
+      }
+    } catch (err: any) {
+      socket.emit('error', { code: err.message, message: err.message })
+    }
+  })
+
   // ── vote:submit ─────────────────────────────────────────────────────────────
   socket.on('vote:submit', async (payload: SubmitVotePayload) => {
     try {
@@ -415,35 +484,50 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
   })
 }
 
-// ─── Round complete handler ───────────────────────────────────────────────────
+// ─── Chat buffer expired → advance to voting ─────────────────────────────────
 function handleRoundComplete(io: Server, roomCode: string) {
+  const game = GameManager.getGame(roomCode)
+  if (!game || game.status !== 'active') return
+
+  GameManager.advanceRound(roomCode)
+  const updatedGame = GameManager.getGame(roomCode)!
+  io.to(roomCode).emit('vote:started', {
+    players: Object.values(updatedGame.players)
+      .filter(p => !p.isEliminated)
+      .map(p => ({ walletAddress: p.walletAddress, displayName: p.displayName })),
+    timeoutSeconds: VOTE_TIMEOUT / 1000,
+    voteRoundNumber: 1,
+  })
+  setVoteTimer(io, roomCode)
+}
+
+// ─── All turns in a describe round done — start next round or chat buffer ─────
+function handleDescribeRoundComplete(io: Server, roomCode: string) {
   const game = GameManager.getGame(roomCode)
   if (!game) return
 
-  // Discussion time is over — advance immediately
-  const { phase } = GameManager.advanceRound(roomCode)
+  // Post-elimination cycles always have exactly 1 describe round
+  const maxDescribeRoundsThisCycle = game.currentRound === 1 ? game.describeRounds : 1
+  const bufferMs = game.currentRound === 1 ? INITIAL_CHAT_BUFFER_MS : POST_ELIM_CHAT_BUFFER_MS
 
-  if (phase === 'next_round') {
-    const updatedGame = GameManager.getGame(roomCode)!
-    io.to(roomCode).emit('round:started', {
-      roundNumber: updatedGame.currentRound,
-      totalRounds: updatedGame.maxRounds,
-      timeoutSeconds: updatedGame.discussionSeconds,
+  if (game.currentDescribeRound < maxDescribeRoundsThisCycle) {
+    // Start next describe round
+    const { firstPlayer } = GameManager.startDescribeRound(roomCode)
+    const updated = GameManager.getGame(roomCode)!
+    io.to(roomCode).emit('turn:started', {
+      playerWalletAddress: firstPlayer.walletAddress,
+      displayName: firstPlayer.displayName,
+      describeRoundNumber: updated.currentDescribeRound,
+      totalDescribeRounds: maxDescribeRoundsThisCycle,
+      turnIndex: 0,
+      totalInRound: updated.descriptionOrder.length,
+      timeoutSeconds: 15,
     })
-    setRoundTimer(io, roomCode, updatedGame.currentRound, updatedGame.discussionSeconds * 1000)
+    setTurnTimer(io, roomCode)
   } else {
-    const updatedGame = GameManager.getGame(roomCode)!
-    io.to(roomCode).emit('vote:started', {
-      players: Object.values(updatedGame.players)
-        .filter(p => !p.isEliminated)
-        .map(p => ({
-          walletAddress: p.walletAddress,
-          displayName: p.displayName,
-        })),
-      timeoutSeconds: VOTE_TIMEOUT / 1000,
-      voteRoundNumber: 1,
-    })
-    setVoteTimer(io, roomCode)
+    // All describe rounds done — open chat buffer
+    io.to(roomCode).emit('chat:buffer_started', { seconds: bufferMs / 1000 })
+    setChatBufferTimer(io, roomCode, bufferMs)
   }
 }
 
@@ -505,12 +589,27 @@ function handleVoteComplete(io: Server, roomCode: string) {
     })
 
     setTimeout(() => {
+      const { firstPlayer } = GameManager.startDescribeRound(roomCode)
+      const refreshed = GameManager.getGame(roomCode)!
       io.to(roomCode).emit('round:started', {
-        roundNumber: updatedGame.currentRound,
-        totalRounds: updatedGame.maxRounds,
-        timeoutSeconds: 120,
+        roundNumber: refreshed.currentRound,
+        totalRounds: refreshed.maxRounds,
+        timeoutSeconds: refreshed.descriptionOrder.length * 15 + 30,
+        firstTurnWalletAddress: firstPlayer.walletAddress,
+        firstTurnDisplayName: firstPlayer.displayName,
+        totalInRound: refreshed.descriptionOrder.length,
+        totalDescribeRounds: 1,
       })
-      setRoundTimer(io, roomCode, updatedGame.currentRound, 120 * 1000)
+      io.to(roomCode).emit('turn:started', {
+        playerWalletAddress: firstPlayer.walletAddress,
+        displayName: firstPlayer.displayName,
+        describeRoundNumber: 1,
+        totalDescribeRounds: 1,
+        turnIndex: 0,
+        totalInRound: refreshed.descriptionOrder.length,
+        timeoutSeconds: 15,
+      })
+      setTurnTimer(io, roomCode)
     }, 4000)
     return
   }
@@ -553,15 +652,50 @@ function handleVoteComplete(io: Server, roomCode: string) {
 
 // ─── Timers ───────────────────────────────────────────────────────────────────
 
-function setRoundTimer(io: Server, roomCode: string, roundNumber: number, timeoutMs = CLUE_TIMEOUT) {
-  clearTimer(`${roomCode}:round:${roundNumber}`)
-  phaseEndTimes.set(roomCode, Date.now() + timeoutMs)
+function setTurnTimer(io: Server, roomCode: string) {
+  const existing = turnTimers.get(roomCode)
+  if (existing) clearTimeout(existing)
   const timer = setTimeout(() => {
+    turnTimers.delete(roomCode)
     const game = GameManager.getGame(roomCode)
     if (!game || game.status !== 'active') return
+    const { isRoundComplete, nextPlayer, skippedPlayer } = GameManager.skipDescriptionTurn(roomCode)
+    io.to(roomCode).emit('description:revealed', {
+      walletAddress: skippedPlayer.walletAddress,
+      displayName: skippedPlayer.displayName,
+      text: '',
+      turnIndex: GameManager.getGame(roomCode)!.descriptionIndex - 1,
+      skipped: true,
+    })
+    if (isRoundComplete) {
+      handleDescribeRoundComplete(io, roomCode)
+    } else {
+      const updated = GameManager.getGame(roomCode)!
+      const maxDescribeRoundsThisCycle = updated.currentRound === 1 ? updated.describeRounds : 1
+      io.to(roomCode).emit('turn:started', {
+        playerWalletAddress: nextPlayer!.walletAddress,
+        displayName: nextPlayer!.displayName,
+        describeRoundNumber: updated.currentDescribeRound,
+        totalDescribeRounds: maxDescribeRoundsThisCycle,
+        turnIndex: updated.descriptionIndex,
+        totalInRound: updated.descriptionOrder.length,
+        timeoutSeconds: 15,
+      })
+      setTurnTimer(io, roomCode)
+    }
+  }, TURN_TIMEOUT_MS)
+  turnTimers.set(roomCode, timer)
+}
+
+function setChatBufferTimer(io: Server, roomCode: string, timeoutMs: number) {
+  const existing = chatBufferTimers.get(roomCode)
+  if (existing) clearTimeout(existing)
+  phaseEndTimes.set(roomCode, Date.now() + timeoutMs)
+  const timer = setTimeout(() => {
+    chatBufferTimers.delete(roomCode)
     handleRoundComplete(io, roomCode)
   }, timeoutMs)
-  roundTimers.set(`${roomCode}:round:${roundNumber}`, timer)
+  chatBufferTimers.set(roomCode, timer)
 }
 
 function setVoteTimer(io: Server, roomCode: string) {

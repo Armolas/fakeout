@@ -58,9 +58,9 @@ export default function App() {
     }).catch(() => {})
   }
 
-  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) {
+  function handleCreateGame(_wallet: string, name: string, type: 'public' | 'private', stakeAmount: string, describeRounds: number, impostorCount: number) {
     setDisplayName(name)
-    game.createGame(type, stakeAmount, discussionSeconds, impostorCount)
+    game.createGame(type, stakeAmount, describeRounds, impostorCount)
   }
 
   function handleJoinGame(_wallet: string, name: string, roomCode?: string) {
@@ -104,7 +104,7 @@ export default function App() {
       <GameLobby
         roomCode={game.roomCode}
         stakeAmount={game.stakeAmount}
-        discussionSeconds={game.discussionSeconds}
+        describeRounds={game.describeRounds}
         players={game.lobbyPlayers}
         isHost={game.isHost}
         hostWalletAddress={game.hostWalletAddress}
@@ -120,7 +120,7 @@ export default function App() {
   if (
     phase === 'word_reveal' ||
     phase === 'clue_phase' ||
-    phase === 'reviewing_clues' ||
+    phase === 'chat_buffer' ||
     phase === 'vote_announce' ||
     phase === 'vote_phase' ||
     phase === 'tiebreak' ||
@@ -133,7 +133,14 @@ export default function App() {
         word={game.word}
         hint={game.hint}
         players={game.players}
-        roundTimeoutSeconds={game.roundTimeoutSeconds}
+        isHost={game.isHost}
+        currentTurnWallet={game.currentTurnWallet}
+        currentTurnIndex={game.currentTurnIndex}
+        describeRoundNumber={game.describeRoundNumber}
+        totalDescribeRounds={game.totalDescribeRounds}
+        totalInRound={game.totalInRound}
+        turnDescriptions={game.turnDescriptions}
+        chatBufferSeconds={game.chatBufferSeconds}
         voteTimeoutSeconds={game.voteTimeoutSeconds}
         chatMessages={game.chatMessages}
         typingUsers={game.typingUsers}
@@ -149,6 +156,7 @@ export default function App() {
         onTyping={game.sendTyping}
         onTypingStop={game.sendTypingStop}
         onReaction={game.sendReaction}
+        onSubmitDescription={game.submitDescription}
         onSubmitVote={game.submitVote}
       />
     )
