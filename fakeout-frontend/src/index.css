@@ -99,9 +99,8 @@ button { cursor: pointer; font-family: inherit; border: none; }
 input  { font-family: inherit; }
 
 /* ─── Base ──────────────────────────────────────────────────────────────────── */
-html, body {
+html, body, #root {
   height: 100%;
-  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
@@ -109,11 +108,6 @@ html, body {
   font-weight: 600;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-}
-
-#root {
-  height: 100%;
-  overflow-y: auto;
 }
 
 body {
@@ -183,8 +177,7 @@ body {
 
 /* ─── Screen layout ─────────────────────────────────────────────────────────── */
 .screen {
-  height: 100dvh;
-  overflow-y: auto;
+  min-height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
   padding: 20px 18px 40px;
