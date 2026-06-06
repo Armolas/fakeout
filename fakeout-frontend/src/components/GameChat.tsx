@@ -224,10 +224,12 @@ export function GameChat({
           : <span>Hint: <strong>{hint}</strong> · Impostor</span>}
       </div>
 
-      <div className="game-header">
-        <span className="round-badge">Discussion</span>
-        <Timer seconds={timeLeft} warn={timeLeft <= 10 && !isClosed} />
-      </div>
+      {timeLeft > 0 && (
+        <div className="game-header">
+          <span className="round-badge">Discussion</span>
+          <Timer seconds={timeLeft} warn={timeLeft <= 10 && !isClosed} />
+        </div>
+      )}
 
       {error && (
         <div className="error-banner" onClick={clearError}>{error}</div>

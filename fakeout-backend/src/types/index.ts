@@ -66,7 +66,11 @@ export interface Game {
   contractGameId: string | null
   currentRound: number
   maxRounds: number
-  discussionSeconds: number
+  describeRounds: number              // 1–3, chosen by host
+  currentDescribeRound: number        // which describe round within the current elimination cycle
+  descriptionOrder: string[]          // playerIds in random turn order for this describe round
+  descriptionIndex: number            // index of currently-active describer
+  descriptions: TurnDescription[]     // accumulates within one elimination cycle
   impostorCount: number
   createdBy: string        // playerId
   players: Record<string, GamePlayer>  // keyed by playerId
@@ -75,6 +79,16 @@ export interface Game {
   tiedPlayerIds?: string[]             // set during tiebreak, cleared after
   createdAt: Date
   completedAt?: Date
+}
+
+// ─── Turn-based descriptions ─────────────────────────────────────────────────
+
+export interface TurnDescription {
+  playerId: string
+  walletAddress: string
+  displayName: string
+  text: string
+  submittedAt: Date
 }
 
 // ─── Rounds ───────────────────────────────────────────────────────────────────
@@ -113,7 +127,7 @@ export interface CreateGamePayload {
   displayName: string
   type: GameType
   stakeAmount: string
-  discussionSeconds: number
+  describeRounds: number
   impostorCount?: number
 }
 
@@ -166,6 +180,7 @@ export interface LobbyUpdatedPayload {
   roomCode: string
   type: GameType
   stakeAmount: string
+  describeRounds: number
 }
 
 export interface LobbyPlayer {
@@ -192,6 +207,32 @@ export interface RoundStartedPayload {
   roundNumber: number
   totalRounds: number
   timeoutSeconds: number
+  firstTurnWalletAddress: string
+  firstTurnDisplayName: string
+  totalInRound: number
+  totalDescribeRounds: number
+}
+
+export interface TurnStartedPayload {
+  playerWalletAddress: string
+  displayName: string
+  describeRoundNumber: number
+  totalDescribeRounds: number
+  turnIndex: number
+  totalInRound: number
+  timeoutSeconds: number
+}
+
+export interface DescriptionRevealedPayload {
+  walletAddress: string
+  displayName: string
+  text: string
+  turnIndex: number
+  skipped?: boolean
+}
+
+export interface ChatBufferStartedPayload {
+  seconds: number
 }
 
 export interface RoundCluesPayload {

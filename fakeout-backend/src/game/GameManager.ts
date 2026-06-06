@@ -48,7 +48,7 @@ export const GameManager = {
     displayName: string
     type: GameType
     stakeAmount: string
-    discussionSeconds: number
+    describeRounds: number
     impostorCount?: number
   }): Promise<Game> {
     // Upsert player
@@ -96,7 +96,11 @@ export const GameManager = {
       contractGameId: null,
       currentRound: 0,
       maxRounds: 1,
-      discussionSeconds: Math.min(600, Math.max(30, params.discussionSeconds)),
+      describeRounds: Math.min(3, Math.max(1, params.describeRounds ?? 1)),
+      currentDescribeRound: 0,
+      descriptionOrder: [],
+      descriptionIndex: 0,
+      descriptions: [],
       impostorCount: Math.min(3, Math.max(1, params.impostorCount ?? 1)),
       createdBy: playerId,
       players: { [playerId]: hostPlayer },
@@ -234,6 +238,10 @@ export const GameManager = {
 
     game.status = 'active'
     game.currentRound = 1
+    game.currentDescribeRound = 0
+    game.descriptionOrder = []
+    game.descriptionIndex = 0
+    game.descriptions = []
     game.clues = [{ roundNumber: 1, clues: [] }]
 
     // Lock the game on-chain (staked games only)
@@ -269,7 +277,6 @@ export const GameManager = {
       p => p.walletAddress === params.walletAddress.toLowerCase()
     )
     if (!player) throw new Error('PLAYER_NOT_IN_GAME')
-    if (player.isEliminated) throw new Error('PLAYER_ELIMINATED')
 
     const trimmed = params.text.trim()
     if (!trimmed) throw new Error('EMPTY_MESSAGE')
@@ -287,14 +294,77 @@ export const GameManager = {
     return { game }
   },
 
-  // ── Start a new discussion round after elimination (always active, ignores maxRounds) ───
+  // ── Start a new discussion round after elimination ───────────────────────────
   startDiscussionRound(roomCode: string): Game {
     const game = activeGames.get(roomCode)
     if (!game) throw new Error('GAME_NOT_FOUND')
     game.currentRound++
     game.status = 'active'
+    game.currentDescribeRound = 0
+    game.descriptionOrder = []
+    game.descriptionIndex = 0
+    game.descriptions = []
     game.clues.push({ roundNumber: game.currentRound, clues: [] })
     return game
+  },
+
+  // ── Start a describe round (shuffle active players into turn order) ───────────
+  startDescribeRound(roomCode: string): { game: Game; firstPlayer: GamePlayer } {
+    const game = activeGames.get(roomCode)
+    if (!game) throw new Error('GAME_NOT_FOUND')
+    const active = Object.values(game.players).filter(p => !p.isEliminated && !p.disconnected)
+    const shuffled = [...active].sort(() => Math.random() - 0.5)
+    game.descriptionOrder = shuffled.map(p => p.playerId)
+    game.descriptionIndex = 0
+    game.currentDescribeRound++
+    const firstPlayer = game.players[game.descriptionOrder[0]]
+    return { game, firstPlayer }
+  },
+
+  // ── Submit a turn description ─────────────────────────────────────────────────
+  submitDescription(params: {
+    roomCode: string
+    walletAddress: string
+    text: string
+  }): { game: Game; isRoundComplete: boolean; nextPlayer: GamePlayer | null } {
+    const game = activeGames.get(params.roomCode)
+    if (!game) throw new Error('GAME_NOT_FOUND')
+    if (game.status !== 'active') throw new Error('NOT_IN_CLUE_PHASE')
+
+    const currentPlayerId = game.descriptionOrder[game.descriptionIndex]
+    const currentPlayer = game.players[currentPlayerId]
+    if (!currentPlayer || currentPlayer.walletAddress !== params.walletAddress.toLowerCase()) {
+      throw new Error('NOT_YOUR_TURN')
+    }
+
+    const trimmed = params.text.trim()
+    if (!trimmed) throw new Error('EMPTY_MESSAGE')
+
+    game.descriptions.push({
+      playerId: currentPlayer.playerId,
+      walletAddress: currentPlayer.walletAddress,
+      displayName: currentPlayer.displayName,
+      text: trimmed,
+      submittedAt: new Date(),
+    })
+
+    game.descriptionIndex++
+    const isRoundComplete = game.descriptionIndex >= game.descriptionOrder.length
+    const nextPlayer = isRoundComplete ? null : game.players[game.descriptionOrder[game.descriptionIndex]]
+    return { game, isRoundComplete, nextPlayer }
+  },
+
+  // ── Skip current description turn (timer expired) ────────────────────────────
+  skipDescriptionTurn(roomCode: string): { game: Game; isRoundComplete: boolean; nextPlayer: GamePlayer | null; skippedPlayer: GamePlayer } {
+    const game = activeGames.get(roomCode)
+    if (!game) throw new Error('GAME_NOT_FOUND')
+
+    const currentPlayerId = game.descriptionOrder[game.descriptionIndex]
+    const skippedPlayer = game.players[currentPlayerId]
+    game.descriptionIndex++
+    const isRoundComplete = game.descriptionIndex >= game.descriptionOrder.length
+    const nextPlayer = isRoundComplete ? null : game.players[game.descriptionOrder[game.descriptionIndex]]
+    return { game, isRoundComplete, nextPlayer, skippedPlayer }
   },
 
   // ── Advance to voting (single round, always goes to voting) ──────────────────
@@ -403,6 +473,12 @@ export const GameManager = {
       } else if (count === maxVotes) {
         topCandidates.push(playerId)
       }
+    }
+
+    // No votes cast — force a draw to avoid crashing on empty tally
+    if (topCandidates.length === 0) {
+      game.status = 'completed'
+      return { game, result: 'draw', tiedPlayerIds: [] }
     }
 
     // Tie

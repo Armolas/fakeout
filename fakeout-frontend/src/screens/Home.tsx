@@ -24,16 +24,10 @@ const STAKE_OPTIONS = [
   { label: '10 G$', value: '10000000000000000000' },
 ]
 
-const DISCUSSION_OPTIONS = [
-  { label: '1 min', value: 60 },
-  { label: '2 min', value: 120 },
-  { label: '3 min', value: 180 },
-  { label: '5 min', value: 300 },
-]
 
 interface Props {
   onJoinGame: (walletAddress: string, displayName: string, roomCode?: string) => void
-  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, discussionSeconds: number, impostorCount: number) => void
+  onCreateGame: (walletAddress: string, displayName: string, type: 'public' | 'private', stakeAmount: string, describeRounds: number, impostorCount: number) => void
   connectedWallet: string
   displayName: string
   onOpenProfile: () => void
@@ -79,9 +73,7 @@ export function Home({
   const [roomCode, setRoomCode] = useState('')
   const [gameType, setGameType] = useState<'public' | 'private'>('public')
   const [stakeAmount, setStakeAmount] = useState(STAKE_OPTIONS[0].value)
-  const [discussionSeconds, setDiscussionSeconds] = useState(120)
-  const [customDiscussion, setCustomDiscussion] = useState(false)
-  const [customDiscussionInput, setCustomDiscussionInput] = useState('')
+  const [describeRounds, setDescribeRounds] = useState(1)
   const [customStake, setCustomStake] = useState(false)
   const [customStakeInput, setCustomStakeInput] = useState('')
   const [impostorCount, setImpostorCount] = useState(1)
@@ -117,7 +109,7 @@ export function Home({
     setNeedsApproval(false)
     const wallet = address!.toLowerCase()
     if (pendingAction === 'create') {
-      onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds, impostorCount)
+      onCreateGame(wallet, displayName, gameType, stakeAmount, describeRounds, impostorCount)
     } else {
       onJoinGame(wallet, displayName, roomCode || undefined)
     }
@@ -152,7 +144,7 @@ export function Home({
       approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
       return
     }
-    onCreateGame(wallet, displayName, gameType, stakeAmount, discussionSeconds, impostorCount)
+    onCreateGame(wallet, displayName, gameType, stakeAmount, describeRounds, impostorCount)
   }
 
   async function handleJoin(code?: string, knownStake?: string) {
@@ -406,45 +398,18 @@ export function Home({
             </div>
 
             <div className="field">
-              <label className="label">Discussion time</label>
+              <label className="label">Description rounds</label>
               <div className="option-pills">
-                {DISCUSSION_OPTIONS.map(opt => (
+                {[1, 2, 3].map(n => (
                   <button
-                    key={opt.value}
-                    className={`option-pill ${!customDiscussion && discussionSeconds === opt.value ? 'active' : ''}`}
-                    onClick={() => { setCustomDiscussion(false); setDiscussionSeconds(opt.value) }}
+                    key={n}
+                    className={`option-pill ${describeRounds === n ? 'active' : ''}`}
+                    onClick={() => setDescribeRounds(n)}
                   >
-                    {opt.label}
+                    {n}
                   </button>
                 ))}
-                <button
-                  className={`option-pill ${customDiscussion ? 'active' : ''}`}
-                  onClick={() => { setCustomDiscussion(true); setCustomDiscussionInput('') }}
-                >
-                  Custom
-                </button>
               </div>
-              {customDiscussion && (
-                <div className="custom-input-row">
-                  <input
-                    className="input input-custom"
-                    type="number"
-                    min={1}
-                    max={60}
-                    placeholder="Minutes (1–60)"
-                    value={customDiscussionInput}
-                    onChange={e => {
-                      const val = e.target.value
-                      setCustomDiscussionInput(val)
-                      const mins = parseInt(val)
-                      if (!isNaN(mins) && mins >= 1 && mins <= 60) {
-                        setDiscussionSeconds(mins * 60)
-                      }
-                    }}
-                  />
-                  <span className="custom-input-unit">min</span>
-                </div>
-              )}
             </div>
 
             <div className="field">
@@ -506,7 +471,7 @@ export function Home({
 
             <div className="create-summary">
               <span className="summary-chip">{gameType === 'public' ? <><Globe size={12} /> Public</> : <><Lock size={12} /> Private</>}</span>
-              <span className="summary-chip"><Timer size={12} /> {(discussionSeconds / 60).toFixed(discussionSeconds % 60 === 0 ? 0 : 1)} min</span>
+              <span className="summary-chip"><Timer size={12} /> {describeRounds} round{describeRounds > 1 ? 's' : ''}</span>
               <span className="summary-chip">
                 {stakeAmount === '0'
                   ? 'Free'
@@ -520,7 +485,6 @@ export function Home({
               disabled={
                 !displayName.trim() ||
                 isApprovalInFlight ||
-                (customDiscussion && (!customDiscussionInput || discussionSeconds < 60)) ||
                 (customStake && customStakeInput === '')
               }
               onClick={handleCreate}
