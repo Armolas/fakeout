@@ -15,6 +15,13 @@
       "when": 1779322630318,
       "tag": "0001_stiff_eternity",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780767328374,
+      "tag": "0002_fixed_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }

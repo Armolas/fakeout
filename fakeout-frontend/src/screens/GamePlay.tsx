@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Eye, User, Vote, Zap, Check, ChevronRight, Skull } from 'lucide-react'
+import { Eye, User, Vote, Zap, Check, ChevronRight, Skull, MessageCircle, X } from 'lucide-react'
 import { GameChat } from '../components/GameChat'
 import type {
   ChatMessage,
   GamePhase,
   PublicPlayer,
+  TurnDescription,
   TypingUser,
 } from '../types'
 
@@ -14,7 +15,14 @@ interface Props {
   word: string
   hint: string
   players: PublicPlayer[]
-  roundTimeoutSeconds: number
+  isHost: boolean
+  currentTurnWallet: string
+  currentTurnIndex: number
+  describeRoundNumber: number
+  totalDescribeRounds: number
+  totalInRound: number
+  turnDescriptions: TurnDescription[]
+  chatBufferSeconds: number
   voteTimeoutSeconds: number
   chatMessages: ChatMessage[]
   typingUsers: TypingUser[]
@@ -33,6 +41,7 @@ interface Props {
   onTyping: () => void
   onTypingStop: () => void
   onReaction: (messageId: string, emoji: string) => void
+  onSubmitDescription: (text: string) => void
   onSubmitVote: (walletAddress: string) => void
 }
 
@@ -42,7 +51,14 @@ export function GamePlay({
   word,
   hint,
   players,
-  roundTimeoutSeconds,
+  isHost: _isHost,
+  currentTurnWallet,
+  currentTurnIndex,
+  describeRoundNumber,
+  totalDescribeRounds,
+  totalInRound,
+  turnDescriptions,
+  chatBufferSeconds,
   voteTimeoutSeconds,
   chatMessages,
   typingUsers,
@@ -58,25 +74,76 @@ export function GamePlay({
   onTyping,
   onTypingStop,
   onReaction,
+  onSubmitDescription,
   onSubmitVote,
 }: Props) {
-  const [timeLeft, setTimeLeft] = useState(roundTimeoutSeconds)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [announceCount, setAnnounceCount] = useState(3)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [describeInput, setDescribeInput] = useState('')
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState(15)
+  const [bufferSecondsLeft, setBufferSecondsLeft] = useState(chatBufferSeconds)
+  const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const bufferTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const prevChatLengthRef = useRef(chatMessages.length)
 
+  const isMyTurn = currentTurnWallet.toLowerCase() === walletAddress.toLowerCase()
+
+  // Track unread chat messages when drawer is closed
   useEffect(() => {
-    if (phase === 'clue_phase') {
-      setTimeLeft(roundTimeoutSeconds)
-      startTimer(roundTimeoutSeconds)
+    if (chatOpen) {
+      setUnreadCount(0)
+      prevChatLengthRef.current = chatMessages.length
+    } else {
+      const newMessages = chatMessages.length - prevChatLengthRef.current
+      if (newMessages > 0) setUnreadCount(n => n + newMessages)
+      prevChatLengthRef.current = chatMessages.length
     }
-    if (phase === 'vote_phase' || phase === 'tiebreak') {
-      setTimeLeft(voteTimeoutSeconds)
-      startTimer(voteTimeoutSeconds)
-    }
-    return () => stopTimer()
-  }, [phase]) // eslint-disable-line
+  }, [chatMessages.length, chatOpen])
 
-  // Countdown display during vote_announce
+  // 15s per-turn countdown — reset on every new turn
+  useEffect(() => {
+    if (phase !== 'clue_phase') return
+    if (!currentTurnWallet) return
+    setTurnSecondsLeft(15)
+    if (turnTimerRef.current) clearInterval(turnTimerRef.current)
+    turnTimerRef.current = setInterval(() => {
+      setTurnSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(turnTimerRef.current!)
+          turnTimerRef.current = null
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => {
+      if (turnTimerRef.current) clearInterval(turnTimerRef.current)
+    }
+  }, [currentTurnWallet, phase])
+
+  // Chat buffer countdown
+  useEffect(() => {
+    if (phase !== 'chat_buffer') return
+    setBufferSecondsLeft(chatBufferSeconds)
+    setChatOpen(true) // auto-open chat when buffer starts
+    if (bufferTimerRef.current) clearInterval(bufferTimerRef.current)
+    bufferTimerRef.current = setInterval(() => {
+      setBufferSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(bufferTimerRef.current!)
+          bufferTimerRef.current = null
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => {
+      if (bufferTimerRef.current) clearInterval(bufferTimerRef.current)
+    }
+  }, [phase, chatBufferSeconds])
+
+  // Vote announce countdown
   useEffect(() => {
     if (phase !== 'vote_announce') return
     setAnnounceCount(3)
@@ -84,28 +151,12 @@ export function GamePlay({
     return () => clearInterval(tick)
   }, [phase])
 
-  function startTimer(seconds: number) {
-    stopTimer()
-    setTimeLeft(seconds)
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          stopTimer()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
+  // Close popup and reset input when turn changes away from me
+  useEffect(() => {
+    if (!isMyTurn) setDescribeInput('')
+  }, [isMyTurn])
 
-  function stopTimer() {
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-  }
-
-  // ── Word reveal phase ──────────────────────────────────────────────────────
+  // ── Word reveal ──────────────────────────────────────────────────────────────
   if (phase === 'word_reveal') {
     return (
       <div className="screen center-content">
@@ -137,34 +188,245 @@ export function GamePlay({
     )
   }
 
-  // ── Clue phase + reviewing clues (unified chat view) ──────────────────────
-  if (phase === 'clue_phase' || phase === 'reviewing_clues') {
-    const isClosed = phase === 'reviewing_clues'
+  // ── Clue phase (turn-based descriptions) ────────────────────────────────────
+  if (phase === 'clue_phase') {
+    const currentDescriber = players.find(
+      p => p.walletAddress.toLowerCase() === currentTurnWallet.toLowerCase()
+    )
 
     return (
-      <div className="screen chat-screen">
-        <GameChat
-          word={word}
-          hint={hint}
-          role={role}
-          players={players}
-          messages={chatMessages}
-          typingUsers={typingUsers}
-          walletAddress={walletAddress}
-          isClosed={isClosed}
-          timeLeft={isClosed ? 0 : timeLeft}
-          error={error}
-          clearError={clearError}
-          onSendMessage={onSendMessage}
-          onTyping={onTyping}
-          onTypingStop={onTypingStop}
-          onReaction={onReaction}
-        />
+      <div className="screen describe-screen">
+        {error && <div className="error-banner" onClick={clearError}>{error}</div>}
+
+        {/* Round indicator */}
+        <div className="describe-round-header">
+          <span className="describe-round-label">
+            Round {describeRoundNumber}/{totalDescribeRounds}
+          </span>
+          <span className="describe-turn-label">
+            {currentDescriber ? `${currentDescriber.displayName} is describing` : 'Loading…'}
+            <span className="describe-turn-timer" data-warn={turnSecondsLeft <= 5}>
+              {turnSecondsLeft}s
+            </span>
+          </span>
+        </div>
+
+        {/* Player grid */}
+        <div className="describe-player-grid">
+          {players.map(p => {
+            const isActive = p.walletAddress.toLowerCase() === currentTurnWallet.toLowerCase()
+            const described = turnDescriptions.some(
+              d => d.walletAddress.toLowerCase() === p.walletAddress.toLowerCase()
+            )
+            const isEliminated = !voteOptions.length
+              ? false
+              : !voteOptions.some(v => v.walletAddress.toLowerCase() === p.walletAddress.toLowerCase())
+            return (
+              <div
+                key={p.walletAddress}
+                className={`describe-player-card ${isActive ? 'active' : ''} ${isEliminated ? 'eliminated' : ''}`}
+              >
+                <div className={`describe-player-avatar ${isActive ? 'pulsing' : ''}`}>
+                  {p.displayName[0]?.toUpperCase()}
+                </div>
+                <span className="describe-player-name">{p.displayName}</span>
+                {described && <span className="describe-player-check"><Check size={10} /></span>}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Descriptions feed */}
+        <div className="describe-feed">
+          {turnDescriptions.length === 0 ? (
+            <p className="describe-feed-empty">Waiting for the first description…</p>
+          ) : (
+            turnDescriptions.map((d, i) => (
+              <div key={i} className={`describe-entry ${d.skipped ? 'skipped' : ''}`}>
+                <span className="describe-entry-avatar">{d.displayName[0]?.toUpperCase()}</span>
+                <span className="describe-entry-name">{d.displayName}</span>
+                <span className="describe-entry-text">
+                  {d.skipped ? <em>(skipped)</em> : `"${d.text}"`}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Floating chat button — hidden while drawer is open */}
+        {!chatOpen && (
+          <button
+            className="chat-fab"
+            onClick={() => { setChatOpen(true); setUnreadCount(0) }}
+          >
+            <MessageCircle size={22} />
+            {unreadCount > 0 && <span className="chat-fab-badge">{unreadCount}</span>}
+          </button>
+        )}
+
+        {/* Chat drawer */}
+        {chatOpen && (
+          <div className="chat-drawer">
+            <div className="chat-drawer-header">
+              <span>Chat</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setChatOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <GameChat
+              word={word}
+              hint={hint}
+              role={role}
+              players={players}
+              messages={chatMessages}
+              typingUsers={typingUsers}
+              walletAddress={walletAddress}
+              isClosed={false}
+              timeLeft={0}
+              error={null}
+              clearError={clearError}
+              onSendMessage={onSendMessage}
+              onTyping={onTyping}
+              onTypingStop={onTypingStop}
+              onReaction={onReaction}
+            />
+          </div>
+        )}
+
+        {/* Your turn popup — locked, cannot dismiss */}
+        {isMyTurn && (
+          <div className="describe-overlay">
+            <div className="describe-popup">
+              {/* Timer bar */}
+              <div className="describe-popup-timer-bar">
+                <div
+                  className="describe-popup-timer-fill"
+                  style={{ width: `${(turnSecondsLeft / 15) * 100}%` }}
+                  data-warn={turnSecondsLeft <= 5}
+                />
+              </div>
+
+              <h3 className="describe-popup-title">Your turn to describe!</h3>
+              <p className="describe-popup-countdown" data-warn={turnSecondsLeft <= 5}>
+                {turnSecondsLeft}s
+              </p>
+
+              {role === 'impostor' ? (
+                <div className="describe-popup-word impostor">
+                  <span className="describe-popup-word-label">Your hint</span>
+                  <span className="describe-popup-word-value">{hint}</span>
+                  <p className="describe-popup-word-note">You don't know the real word — blend in</p>
+                </div>
+              ) : (
+                <div className="describe-popup-word crewmate">
+                  <span className="describe-popup-word-label">The word is</span>
+                  <span className="describe-popup-word-value">{word}</span>
+                </div>
+              )}
+
+              <textarea
+                className="describe-popup-input"
+                placeholder="Type your description…"
+                maxLength={120}
+                value={describeInput}
+                autoFocus
+                onChange={e => setDescribeInput(e.target.value)}
+              />
+              <p className="describe-popup-charcount">{describeInput.length}/120</p>
+
+              <button
+                className="btn btn-primary btn-lg describe-popup-submit"
+                disabled={!describeInput.trim()}
+                onClick={() => {
+                  onSubmitDescription(describeInput.trim())
+                  setDescribeInput('')
+                }}
+              >
+                Submit
+              </button>
+
+              <p className="describe-popup-hint">
+                Turn {currentTurnIndex + 1} of {totalInRound}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
-  // ── Vote announce interstitial ─────────────────────────────────────────────
+  // ── Chat buffer phase ────────────────────────────────────────────────────────
+  if (phase === 'chat_buffer') {
+    return (
+      <div className="screen describe-screen">
+        {/* Buffer banner */}
+        <div className="chat-buffer-banner">
+          <MessageCircle size={16} />
+          <span>Open discussion</span>
+          <span className="chat-buffer-timer">{bufferSecondsLeft}s</span>
+        </div>
+
+        {/* Descriptions summary (read-only) */}
+        <div className="describe-feed describe-feed-summary">
+          {turnDescriptions.length === 0 ? (
+            <p className="describe-feed-empty">No descriptions were submitted.</p>
+          ) : (
+            turnDescriptions.map((d, i) => (
+              <div key={i} className={`describe-entry ${d.skipped ? 'skipped' : ''}`}>
+                <span className="describe-entry-avatar">{d.displayName[0]?.toUpperCase()}</span>
+                <span className="describe-entry-name">{d.displayName}</span>
+                <span className="describe-entry-text">
+                  {d.skipped ? <em>(skipped)</em> : `"${d.text}"`}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Floating chat button — hidden while drawer is open */}
+        {!chatOpen && (
+          <button
+            className="chat-fab"
+            onClick={() => { setChatOpen(true); setUnreadCount(0) }}
+          >
+            <MessageCircle size={22} />
+            {unreadCount > 0 && <span className="chat-fab-badge">{unreadCount}</span>}
+          </button>
+        )}
+
+        {/* Full-height chat drawer */}
+        {chatOpen && (
+          <div className="chat-drawer">
+            <div className="chat-drawer-header">
+              <span>Chat</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setChatOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <GameChat
+              word={word}
+              hint={hint}
+              role={role}
+              players={players}
+              messages={chatMessages}
+              typingUsers={typingUsers}
+              walletAddress={walletAddress}
+              isClosed={false}
+              timeLeft={0}
+              error={error}
+              clearError={clearError}
+              onSendMessage={onSendMessage}
+              onTyping={onTyping}
+              onTypingStop={onTypingStop}
+              onReaction={onReaction}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Vote announce interstitial ───────────────────────────────────────────────
   if (phase === 'vote_announce') {
     return (
       <div className="screen center-content">
@@ -178,7 +440,7 @@ export function GamePlay({
     )
   }
 
-  // ── Vote phase + tiebreak ──────────────────────────────────────────────────
+  // ── Vote phase + tiebreak ────────────────────────────────────────────────────
   if (phase === 'vote_phase' || phase === 'tiebreak') {
     const options = phase === 'tiebreak' ? (tiebreakPlayers ?? voteOptions) : voteOptions
     const selfInOptions = options.some(p => p.walletAddress.toLowerCase() === walletAddress.toLowerCase())
@@ -189,7 +451,7 @@ export function GamePlay({
           <span className={`round-badge ${phase === 'tiebreak' ? 'tiebreak' : ''}`}>
             {phase === 'tiebreak' ? <><Zap size={14} /> Tiebreak</> : 'Vote'}
           </span>
-          <Timer seconds={timeLeft} warn={timeLeft <= 10} />
+          <Timer seconds={voteTimeoutSeconds} warn={voteTimeoutSeconds <= 10} />
         </div>
 
         {error && <div className="error-banner" onClick={clearError}>{error}</div>}
@@ -241,7 +503,7 @@ export function GamePlay({
     )
   }
 
-  // ── Eliminated notice ──────────────────────────────────────────────────────
+  // ── Eliminated notice ────────────────────────────────────────────────────────
   if (phase === 'eliminated_notice' && eliminatedPlayer) {
     const isSelf = eliminatedPlayer.walletAddress.toLowerCase() === walletAddress.toLowerCase()
     return (
@@ -249,7 +511,7 @@ export function GamePlay({
         <div className="eliminated-notice">
           <div className="eliminated-icon"><Skull size={48} /></div>
           <h2>{eliminatedPlayer.displayName} was eliminated</h2>
-          {isSelf && <p className="hint">You have been eliminated. Watch the rest of the game!</p>}
+          {isSelf && <p className="hint">You have been eliminated. You can still chat!</p>}
           <p className="muted">Next round starting…</p>
         </div>
       </div>

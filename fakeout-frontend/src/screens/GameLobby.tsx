@@ -8,7 +8,7 @@ import type { LobbyPlayer } from '../types'
 interface Props {
   roomCode: string
   stakeAmount: string
-  discussionSeconds: number
+  describeRounds: number
   players: LobbyPlayer[]
   isHost: boolean
   hostWalletAddress: string
@@ -24,7 +24,7 @@ const MAX_UINT256 = 2n ** 256n - 1n
 export function GameLobby({
   roomCode,
   stakeAmount,
-  discussionSeconds,
+  describeRounds,
   players,
   isHost,
   onStart,
@@ -71,7 +71,7 @@ export function GameLobby({
         <div className="lobby-meta">
           <span className="badge">{stakeLabel}</span>
           <span className="badge">{players.length}/10</span>
-          <span className="badge">{discussionSeconds / 60}m</span>
+          <span className="badge">{describeRounds} round{describeRounds > 1 ? 's' : ''}</span>
         </div>
       </div>
 

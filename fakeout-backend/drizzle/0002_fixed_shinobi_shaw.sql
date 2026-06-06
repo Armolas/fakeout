@@ -1,0 +1,1 @@
+ALTER TABLE "game_players" DROP COLUMN "is_first_game";
