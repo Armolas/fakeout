@@ -14,9 +14,9 @@ import {
 } from '../types'
 
 const VOTE_TIMEOUT = parseInt(process.env.VOTE_TIMEOUT_SECONDS || '60') * 1000
-const TURN_TIMEOUT_MS = 20_000
-const INITIAL_CHAT_BUFFER_MS = 90_000
-const POST_ELIM_CHAT_BUFFER_MS = 30_000
+const TURN_TIMEOUT_MS = 30_000
+const INITIAL_CHAT_BUFFER_MS = 120_000
+const POST_ELIM_CHAT_BUFFER_MS = 60_000
 
 // Track timers
 const roundTimers = new Map<string, NodeJS.Timeout>()
@@ -249,7 +249,7 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         io.to(game.roomCode).emit('round:started', {
           roundNumber: 1,
           totalRounds: updated.maxRounds,
-          timeoutSeconds: updated.describeRounds * updated.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + 90,
+          timeoutSeconds: updated.describeRounds * updated.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + (INITIAL_CHAT_BUFFER_MS / 1000),
           firstTurnWalletAddress: firstPlayer.walletAddress,
           firstTurnDisplayName: firstPlayer.displayName,
           totalInRound: updated.descriptionOrder.length,
@@ -594,7 +594,7 @@ function handleVoteComplete(io: Server, roomCode: string) {
       io.to(roomCode).emit('round:started', {
         roundNumber: refreshed.currentRound,
         totalRounds: refreshed.maxRounds,
-        timeoutSeconds: refreshed.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + 30,
+        timeoutSeconds: refreshed.descriptionOrder.length * (TURN_TIMEOUT_MS / 1000) + (POST_ELIM_CHAT_BUFFER_MS / 1000),
         firstTurnWalletAddress: firstPlayer.walletAddress,
         firstTurnDisplayName: firstPlayer.displayName,
         totalInRound: refreshed.descriptionOrder.length,

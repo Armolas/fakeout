@@ -18,12 +18,12 @@ const STEPS = [
   {
     icon: <MessageSquare size={18} />,
     title: 'Describe the word',
-    body: 'Players take turns in random order. You have 20 seconds to describe your word (or fake it convincingly).',
+    body: 'Players take turns in random order. You have 30 seconds to describe your word (or fake it convincingly).',
   },
   {
     icon: <MessageCircle size={18} />,
     title: 'Open discussion',
-    body: 'After all descriptions, a 90-second open chat lets everyone argue their case and accuse suspects.',
+    body: 'After all descriptions, a 2-minute open chat lets everyone argue their case and accuse suspects.',
   },
   {
     icon: <Vote size={18} />,

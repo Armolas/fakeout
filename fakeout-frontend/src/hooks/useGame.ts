@@ -89,7 +89,7 @@ const INITIAL_STATE: GameState = {
   totalDescribeRounds: 1,
   totalInRound: 0,
   turnDescriptions: [],
-  chatBufferSeconds: 90,
+  chatBufferSeconds: 120,
   chatMessages: [],
   typingUsers: [],
   hasVoted: false,
