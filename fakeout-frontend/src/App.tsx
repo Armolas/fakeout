@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { useGame } from './hooks/useGame'
+import { useMusic } from './hooks/useMusic'
 import { Home } from './screens/Home'
 import { Profile } from './screens/Profile'
 import { GameLobby } from './screens/GameLobby'
@@ -47,6 +49,7 @@ export default function App() {
   }, [walletAddress])
 
   const game = useGame(walletAddress, displayName)
+  const { isMuted, toggleMute } = useMusic(game.phase)
 
   async function handleEditName(name: string) {
     if (!walletAddress || !name.trim()) return
@@ -75,113 +78,128 @@ export default function App() {
   // ── Route by game phase ────────────────────────────────────────────────────
   const { phase } = game
 
-  if (showProfile) {
+  function renderScreen() {
+    if (showProfile) {
+      return (
+        <Profile
+          walletAddress={walletAddress}
+          displayName={displayName}
+          playerStats={playerStats}
+          onEditName={handleEditName}
+          onBack={() => setShowProfile(false)}
+          onDisconnect={() => { disconnect(); setShowProfile(false) }}
+        />
+      )
+    }
+
+    if (phase === 'results' && game.result) {
+      return (
+        <Results
+          result={game.result}
+          walletAddress={walletAddress}
+          role={game.role}
+          onPlayAgain={handleLeave}
+        />
+      )
+    }
+
+    if (phase === 'lobby') {
+      return (
+        <GameLobby
+          roomCode={game.roomCode}
+          stakeAmount={game.stakeAmount}
+          describeRounds={game.describeRounds}
+          players={game.lobbyPlayers}
+          isHost={game.isHost}
+          hostWalletAddress={game.hostWalletAddress}
+          walletAddress={walletAddress}
+          onStart={game.startGame}
+          onLeave={handleLeave}
+          error={game.error}
+          clearError={game.clearError}
+        />
+      )
+    }
+
+    if (
+      phase === 'word_reveal' ||
+      phase === 'clue_phase' ||
+      phase === 'chat_buffer' ||
+      phase === 'vote_announce' ||
+      phase === 'vote_phase' ||
+      phase === 'tiebreak' ||
+      phase === 'eliminated_notice'
+    ) {
+      return (
+        <GamePlay
+          phase={phase}
+          role={game.role}
+          word={game.word}
+          hint={game.hint}
+          players={game.players}
+          isHost={game.isHost}
+          currentTurnWallet={game.currentTurnWallet}
+          currentTurnIndex={game.currentTurnIndex}
+          describeRoundNumber={game.describeRoundNumber}
+          totalDescribeRounds={game.totalDescribeRounds}
+          totalInRound={game.totalInRound}
+          turnDescriptions={game.turnDescriptions}
+          chatBufferSeconds={game.chatBufferSeconds}
+          voteTimeoutSeconds={game.voteTimeoutSeconds}
+          chatMessages={game.chatMessages}
+          typingUsers={game.typingUsers}
+          hasVoted={game.hasVoted}
+          voteOptions={game.voteOptions}
+          voteProgress={game.voteProgress}
+          tiebreakPlayers={game.tiebreakPlayers}
+          eliminatedPlayer={game.eliminatedPlayer}
+          walletAddress={walletAddress}
+          error={game.error}
+          clearError={game.clearError}
+          onSendMessage={game.sendChatMessage}
+          onTyping={game.sendTyping}
+          onTypingStop={game.sendTypingStop}
+          onReaction={game.sendReaction}
+          onSubmitDescription={game.submitDescription}
+          onSubmitVote={game.submitVote}
+        />
+      )
+    }
+
+    // Default: home
     return (
-      <Profile
-        walletAddress={walletAddress}
-        displayName={displayName}
-        playerStats={playerStats}
-        onEditName={handleEditName}
-        onBack={() => setShowProfile(false)}
-        onDisconnect={() => { disconnect(); setShowProfile(false) }}
-      />
+      <>
+        {isFirstTime && walletAddress && phase === 'idle' && (
+          <FirstTimeModal
+            onConfirm={name => {
+              setIsFirstTime(false)
+              handleEditName(name)
+            }}
+          />
+        )}
+        <Home
+          onCreateGame={handleCreateGame}
+          onJoinGame={handleJoinGame}
+          connectedWallet={walletAddress}
+          displayName={displayName}
+          onOpenProfile={() => setShowProfile(true)}
+          error={game.error}
+          clearError={game.clearError}
+        />
+      </>
     )
   }
 
-  if (phase === 'results' && game.result) {
-    return (
-      <Results
-        result={game.result}
-        walletAddress={walletAddress}
-        role={game.role}
-        onPlayAgain={handleLeave}
-      />
-    )
-  }
-
-  if (phase === 'lobby') {
-    return (
-      <GameLobby
-        roomCode={game.roomCode}
-        stakeAmount={game.stakeAmount}
-        describeRounds={game.describeRounds}
-        players={game.lobbyPlayers}
-        isHost={game.isHost}
-        hostWalletAddress={game.hostWalletAddress}
-        walletAddress={walletAddress}
-        onStart={game.startGame}
-        onLeave={handleLeave}
-        error={game.error}
-        clearError={game.clearError}
-      />
-    )
-  }
-
-  if (
-    phase === 'word_reveal' ||
-    phase === 'clue_phase' ||
-    phase === 'chat_buffer' ||
-    phase === 'vote_announce' ||
-    phase === 'vote_phase' ||
-    phase === 'tiebreak' ||
-    phase === 'eliminated_notice'
-  ) {
-    return (
-      <GamePlay
-        phase={phase}
-        role={game.role}
-        word={game.word}
-        hint={game.hint}
-        players={game.players}
-        isHost={game.isHost}
-        currentTurnWallet={game.currentTurnWallet}
-        currentTurnIndex={game.currentTurnIndex}
-        describeRoundNumber={game.describeRoundNumber}
-        totalDescribeRounds={game.totalDescribeRounds}
-        totalInRound={game.totalInRound}
-        turnDescriptions={game.turnDescriptions}
-        chatBufferSeconds={game.chatBufferSeconds}
-        voteTimeoutSeconds={game.voteTimeoutSeconds}
-        chatMessages={game.chatMessages}
-        typingUsers={game.typingUsers}
-        hasVoted={game.hasVoted}
-        voteOptions={game.voteOptions}
-        voteProgress={game.voteProgress}
-        tiebreakPlayers={game.tiebreakPlayers}
-        eliminatedPlayer={game.eliminatedPlayer}
-        walletAddress={walletAddress}
-        error={game.error}
-        clearError={game.clearError}
-        onSendMessage={game.sendChatMessage}
-        onTyping={game.sendTyping}
-        onTypingStop={game.sendTypingStop}
-        onReaction={game.sendReaction}
-        onSubmitDescription={game.submitDescription}
-        onSubmitVote={game.submitVote}
-      />
-    )
-  }
-
-  // Default: home
   return (
     <>
-      {isFirstTime && walletAddress && phase === 'idle' && (
-        <FirstTimeModal
-          onConfirm={name => {
-            setIsFirstTime(false)
-            handleEditName(name)
-          }}
-        />
-      )}
-      <Home
-        onCreateGame={handleCreateGame}
-        onJoinGame={handleJoinGame}
-        connectedWallet={walletAddress}
-        displayName={displayName}
-        onOpenProfile={() => setShowProfile(true)}
-        error={game.error}
-        clearError={game.clearError}
-      />
+      {renderScreen()}
+      <button
+        className="music-fab"
+        onClick={toggleMute}
+        title={isMuted ? 'Unmute music' : 'Mute music'}
+      >
+        {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+      </button>
     </>
   )
 }
