@@ -32,7 +32,7 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
-  const { isWhitelisted, fvLink, isGenerating, linkError, generateLink, onVerified, closeModal } = useIdentityVerification()
+  const { isWhitelisted, identityError, retryIdentityCheck, isGenerating, linkError, isVerifying, openVerificationPopup, closeModal } = useIdentityVerification()
   const { address } = useAccount()
   const { data: celoBalance } = useBalance({ address, query: { enabled: !!address } })
   const { data: gdBalance } = useReadContract({
@@ -184,17 +184,22 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
         claimSuccess={claimSuccess}
         onClaim={claim}
         isWhitelisted={isWhitelisted}
-        onVerifyClick={generateLink}
+        onVerifyClick={openVerificationPopup}
         isVerifying={isGenerating}
       />
 
-      {(fvLink || isGenerating || linkError) && (
+      {identityError && (
+        <div className="identity-error-banner" onClick={retryIdentityCheck}>
+          Could not check identity status. Check your connection and tap to retry.
+        </div>
+      )}
+
+      {(isGenerating || linkError || isVerifying) && (
         <IdentityVerificationModal
-          fvLink={fvLink}
           isGenerating={isGenerating}
           linkError={linkError}
-          onRetry={generateLink}
-          onVerified={onVerified}
+          isVerifying={isVerifying}
+          onRetry={retryIdentityCheck}
           onClose={closeModal}
         />
       )}
