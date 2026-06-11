@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { formatUnits } from 'viem'
-import { ChevronLeft, ChevronRight, Check, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, Pencil, Volume2, VolumeX } from 'lucide-react'
 import { useAccount, useBalance, useReadContract } from 'wagmi'
 import { GOOD_DOLLAR_ADDRESS } from '../config/contracts'
 import { ERC20_ABI } from '../config/contracts'
@@ -25,9 +25,11 @@ interface Props {
   onEditName: (name: string) => void
   onBack: () => void
   onDisconnect: () => void
+  isMuted: boolean
+  toggleMute: () => void
 }
 
-export function Profile({ walletAddress, displayName, playerStats, onEditName, onBack, onDisconnect }: Props) {
+export function Profile({ walletAddress, displayName, playerStats, onEditName, onBack, onDisconnect, isMuted, toggleMute }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(displayName)
   const [copied, setCopied] = useState(false)
@@ -208,6 +210,13 @@ export function Profile({ walletAddress, displayName, playerStats, onEditName, o
         <p className="profile-card-label">Appearance</p>
         <div className="profile-theme-section">
           <ThemeToggle preference={themePreference} onChange={setThemePreference} />
+        </div>
+        <div className="profile-card-divider" />
+        <div className="profile-music-row">
+          <span className="profile-music-label">Music</span>
+          <button className="profile-music-toggle" onClick={toggleMute}>
+            {isMuted ? <><VolumeX size={16} /> Off</> : <><Volume2 size={16} /> On</>}
+          </button>
         </div>
       </div>
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
-import { Volume2, VolumeX } from 'lucide-react'
 import { useGame } from './hooks/useGame'
 import { useMusic } from './hooks/useMusic'
 import { Home } from './screens/Home'
@@ -88,6 +87,8 @@ export default function App() {
           onEditName={handleEditName}
           onBack={() => setShowProfile(false)}
           onDisconnect={() => { disconnect(); setShowProfile(false) }}
+          isMuted={isMuted}
+          toggleMute={toggleMute}
         />
       )
     }
@@ -190,16 +191,5 @@ export default function App() {
     )
   }
 
-  return (
-    <>
-      {renderScreen()}
-      <button
-        className="music-fab"
-        onClick={toggleMute}
-        title={isMuted ? 'Unmute music' : 'Mute music'}
-      >
-        {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-      </button>
-    </>
-  )
+  return renderScreen()
 }

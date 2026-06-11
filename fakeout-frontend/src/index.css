@@ -1087,30 +1087,32 @@ body {
   word-break: break-word;
 }
 
-/* Music mute toggle FAB */
-.music-fab {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  z-index: 90;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--surface2);
-  border: 1.5px solid var(--border);
-  color: var(--muted);
+/* Profile music toggle row */
+.profile-music-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: color 0.15s, background 0.15s;
+  justify-content: space-between;
+  padding: 4px 0;
 }
-.music-fab:hover {
+.profile-music-label {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.profile-music-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--ink);
-  background: var(--surface3, var(--surface2));
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-.music-fab:active { transform: scale(0.93); }
+.profile-music-toggle:hover { background: var(--surface3, var(--surface2)); }
 
 /* Floating chat FAB */
 .chat-fab {
