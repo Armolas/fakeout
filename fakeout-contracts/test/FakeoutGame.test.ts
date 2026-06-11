@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { ethers } from 'hardhat'
+import { ethers, upgrades } from 'hardhat'
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers'
 import { FakeoutGame } from '../typechain-types'
 
@@ -34,12 +34,13 @@ describe('FakeoutGame', () => {
       await mockToken.transfer(player.address, ethers.parseEther('10'))
     }
 
-    // Deploy FakeoutGame
+    // Deploy FakeoutGame via UUPS proxy
     const FakeoutGame = await ethers.getContractFactory('FakeoutGame')
-    fakeout = await FakeoutGame.deploy(
-      await mockToken.getAddress(),
-      treasury.address
-    )
+    fakeout = await upgrades.deployProxy(
+      FakeoutGame,
+      [await mockToken.getAddress(), treasury.address],
+      { kind: 'uups', initializer: 'initialize', unsafeAllow: ['constructor'] }
+    ) as unknown as FakeoutGame
     await fakeout.waitForDeployment()
   })
 

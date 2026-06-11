@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { celo } from 'wagmi/chains'
 import { IdentitySDK } from '@goodsdks/citizen-sdk'
@@ -10,66 +10,107 @@ export function useIdentityVerification() {
   const publicClient = usePublicClient({ chainId: celo.id })
   const { data: walletClient } = useWalletClient({ chainId: celo.id })
 
+  // null = loading/unknown, true = verified, false = confirmed not whitelisted
   const [isWhitelisted, setIsWhitelisted] = useState<boolean | null>(null)
-  const [fvLink, setFvLink] = useState<string | null>(null)
+  // true only when there was a network/SDK error — distinct from "not whitelisted"
+  const [identityError, setIdentityError] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [linkError, setLinkError] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false) // popup is open
 
-  // Initial whitelist check — walletClient must be defined (SDK accesses .account in constructor)
+  const popupRef = useRef<Window | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Initial whitelist check — errors set identityError, NOT isWhitelisted=false
   useEffect(() => {
     if (!address || !publicClient || !walletClient) return
+    setIdentityError(false)
     const sdk = new IdentitySDK({ account: address, publicClient, walletClient, env: GD_ENV })
     sdk.getWhitelistedRoot(address)
       .then(({ isWhitelisted }) => setIsWhitelisted(isWhitelisted))
-      .catch(() => setIsWhitelisted(false))
+      .catch(() => setIdentityError(true))
   }, [address, publicClient, walletClient])
 
-  // Poll every 5s while modal is open — detects completion without relying on iframe redirect
+  // Clean up poll interval on unmount
   useEffect(() => {
-    if (!fvLink || !address || !publicClient || !walletClient) return
-    const id = setInterval(() => {
-      const sdk = new IdentitySDK({ account: address, publicClient, walletClient, env: GD_ENV })
-      sdk.getWhitelistedRoot(address)
-        .then(({ isWhitelisted }) => { if (isWhitelisted) onVerified() })
-        .catch(() => {})
-    }, 5000)
-    return () => clearInterval(id)
-  }, [fvLink, address, publicClient, walletClient]) // eslint-disable-line
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
 
-  const generateLink = useCallback(async () => {
+  const checkWhitelist = useCallback(async () => {
+    if (!address || !publicClient || !walletClient) return
+    const sdk = new IdentitySDK({ account: address, publicClient, walletClient, env: GD_ENV })
+    try {
+      const { isWhitelisted } = await sdk.getWhitelistedRoot(address)
+      setIsWhitelisted(isWhitelisted)
+      if (isWhitelisted) {
+        setIsVerifying(false)
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      }
+    } catch { /* ignore transient poll errors */ }
+  }, [address, publicClient, walletClient])
+
+  const openVerificationPopup = useCallback(async () => {
     if (!address || !publicClient || !walletClient?.account) return
     setIsGenerating(true)
     setLinkError(false)
-    setFvLink(null)
     try {
       const sdk = new IdentitySDK({ account: address, publicClient, walletClient, env: GD_ENV })
-      const result = await sdk.generateFVLink(false, window.location.href, celo.id)
-      // SDK may return a string or an object { link: string }
+      const result = await sdk.generateFVLink(true, window.location.href, celo.id)
       const link = typeof result === 'string' ? result : (result as any)?.link ?? null
-      if (!link) {
+      if (!link) { setLinkError(true); return }
+
+      const popup = window.open(link, 'faceVerification', 'width=600,height=700,scrollbars=yes,resizable=yes')
+      if (!popup) {
+        // Popup blocked by browser — show link error with hint
         setLinkError(true)
-      } else {
-        setFvLink(link)
+        return
       }
+      popupRef.current = popup
+      setIsVerifying(true)
+
+      // Poll until popup is closed, then re-check whitelist status
+      if (pollRef.current) clearInterval(pollRef.current)
+      pollRef.current = setInterval(() => {
+        if (popupRef.current?.closed) {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+          checkWhitelist()
+        }
+      }, 1000)
     } catch (e) {
       console.error('[identity] generateFVLink failed:', e)
       setLinkError(true)
     } finally {
       setIsGenerating(false)
     }
+  }, [address, publicClient, walletClient, checkWhitelist])
+
+  const retryIdentityCheck = useCallback(() => {
+    if (!address || !publicClient || !walletClient) return
+    setIdentityError(false)
+    const sdk = new IdentitySDK({ account: address, publicClient, walletClient, env: GD_ENV })
+    sdk.getWhitelistedRoot(address)
+      .then(({ isWhitelisted }) => setIsWhitelisted(isWhitelisted))
+      .catch(() => setIdentityError(true))
   }, [address, publicClient, walletClient])
 
-  const onVerified = useCallback(() => {
-    setFvLink(null)
-    setLinkError(false)
-    setIsWhitelisted(null) // triggers re-check via useEffect
-  }, [])
-
   const closeModal = useCallback(() => {
-    setFvLink(null)
+    setIsVerifying(false)
     setLinkError(false)
     setIsGenerating(false)
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    if (popupRef.current && !popupRef.current.closed) popupRef.current.close()
   }, [])
 
-  return { isWhitelisted, fvLink, isGenerating, linkError, generateLink, onVerified, closeModal }
+  return {
+    isWhitelisted,
+    identityError,
+    retryIdentityCheck,
+    isGenerating,
+    linkError,
+    isVerifying,
+    openVerificationPopup,
+    closeModal,
+  }
 }

@@ -19,8 +19,6 @@ interface Props {
   clearError: () => void
 }
 
-const MAX_UINT256 = 2n ** 256n - 1n
-
 export function GameLobby({
   roomCode,
   stakeAmount,
@@ -54,7 +52,7 @@ export function GameLobby({
   const isApprovalInFlight = isApproving || isWaitingApproval
 
   function handleApprove() {
-    approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
+    approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, BigInt(stakeAmount)] })
   }
 
   const canStart = players.length >= 3

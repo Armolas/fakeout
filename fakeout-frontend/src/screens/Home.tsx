@@ -50,7 +50,7 @@ export function Home({
   const { connect, isPending: isConnecting } = useConnect()
   const connectors = useConnectors()
   const { entitlement, nextClaimTime, isClaiming, claimSuccess, claim } = useUBIClaim()
-  const { isWhitelisted, fvLink, isGenerating, linkError, generateLink, onVerified, closeModal } = useIdentityVerification()
+  const { isWhitelisted, identityError, retryIdentityCheck, isGenerating, linkError, isVerifying, openVerificationPopup, closeModal } = useIdentityVerification()
 
   const [loginEmail, setLoginEmail] = useState('')
 
@@ -100,8 +100,6 @@ export function Home({
     query: { enabled: !!address },
   })
 
-  const MAX_UINT256 = 2n ** 256n - 1n
-
   const { writeContract: approve, data: approveTxHash, isPending: isApproving, error: approveError } = useWriteContract()
   const { isLoading: isWaitingApproval, isSuccess: approvalConfirmed } = useWaitForTransactionReceipt({ hash: approveTxHash })
 
@@ -143,7 +141,7 @@ export function Home({
     if (BigInt(stakeAmount) > 0n && !hasEnoughAllowance()) {
       setNeedsApproval(true)
       setPendingAction('create')
-      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
+      approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, BigInt(stakeAmount)] })
       return
     }
     onCreateGame(wallet, displayName, gameType, stakeAmount, describeRounds, impostorCount)
@@ -184,7 +182,7 @@ export function Home({
       if (currentAllowance < BigInt(targetStake)) {
         setNeedsApproval(true)
         setPendingAction('join')
-        approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, MAX_UINT256] })
+        approve({ address: GOOD_DOLLAR_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [FAKEOUT_CONTRACT_ADDRESS, BigInt(targetStake)] })
         return
       }
     }
@@ -311,18 +309,23 @@ export function Home({
           claimSuccess={claimSuccess}
           onClaim={claim}
           isWhitelisted={isWhitelisted}
-          onVerifyClick={generateLink}
-          isVerifying={isGenerating}
+          onVerifyClick={openVerificationPopup}
+          isVerifying={isGenerating || isVerifying}
         />
       )}
 
-      {(fvLink || isGenerating || linkError) && (
+      {identityError && (
+        <div className="error-banner" onClick={retryIdentityCheck}>
+          Could not check identity status. Tap to retry.
+        </div>
+      )}
+
+      {(isGenerating || linkError || isVerifying) && (
         <IdentityVerificationModal
-          fvLink={fvLink}
           isGenerating={isGenerating}
           linkError={linkError}
-          onRetry={generateLink}
-          onVerified={onVerified}
+          isVerifying={isVerifying}
+          onRetry={openVerificationPopup}
           onClose={closeModal}
         />
       )}

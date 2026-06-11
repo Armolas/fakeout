@@ -1,4 +1,4 @@
-import { ethers, network } from 'hardhat'
+import { ethers, network, upgrades } from 'hardhat'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -58,26 +58,31 @@ async function main() {
   console.log(`   G$ token:  ${goodDollarAddress}`)
   console.log(`   Treasury:  ${treasuryAddress}\n`)
 
-  // ── Deploy ──────────────────────────────────────────────────────────────────
+  // ── Deploy via UUPS proxy ────────────────────────────────────────────────────
   const FakeoutGame = await ethers.getContractFactory('FakeoutGame')
-  const fakeoutGame = await FakeoutGame.deploy(goodDollarAddress, treasuryAddress)
+  const proxy = await upgrades.deployProxy(
+    FakeoutGame,
+    [goodDollarAddress, treasuryAddress],
+    { kind: 'uups', initializer: 'initialize', unsafeAllow: ['constructor'] }
+  )
 
-  await fakeoutGame.waitForDeployment()
+  await proxy.waitForDeployment()
 
-  const contractAddress = await fakeoutGame.getAddress()
+  const proxyAddress = await proxy.getAddress()
+  const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress)
 
-  console.log(`✅ FakeoutGame deployed to: ${contractAddress}`)
-  console.log(`   Tx hash: ${fakeoutGame.deploymentTransaction()?.hash}\n`)
+  console.log(`✅ FakeoutGame proxy deployed to:          ${proxyAddress}`)
+  console.log(`   Implementation deployed to:             ${implAddress}\n`)
 
   // ── Save deployment info ────────────────────────────────────────────────────
   const deploymentInfo = {
     network: networkName,
-    contractAddress,
+    contractAddress: proxyAddress,
+    implementationAddress: implAddress,
     goodDollarAddress,
     treasuryAddress,
     deployer: deployer.address,
     deployedAt: new Date().toISOString(),
-    txHash: fakeoutGame.deploymentTransaction()?.hash,
   }
 
   const deploymentsDir = path.join(__dirname, '../deployments')
@@ -90,8 +95,8 @@ async function main() {
   console.log(`📄 Deployment info saved to deployments/${networkName}.json`)
 
   // ── Remind to verify ────────────────────────────────────────────────────────
-  console.log(`\n🔍 To verify on Celoscan:`)
-  console.log(`   npx hardhat verify --network ${networkName} ${contractAddress} ${goodDollarAddress} ${treasuryAddress}\n`)
+  console.log(`\n🔍 To verify implementation on Celoscan:`)
+  console.log(`   npx hardhat verify --network ${networkName} ${implAddress}\n`)
 
   // ── Update backend .env reminder ────────────────────────────────────────────
   const rpcByNetwork: Record<string, string> = {
@@ -100,7 +105,7 @@ async function main() {
     celo: 'https://forno.celo.org',
   }
   console.log(`📝 Update your backend .env:`)
-  console.log(`   CONTRACT_ADDRESS=${contractAddress}`)
+  console.log(`   CONTRACT_ADDRESS=${proxyAddress}`)
   console.log(`   CELO_RPC_URL=${rpcByNetwork[networkName] ?? ''}\n`)
 }
 

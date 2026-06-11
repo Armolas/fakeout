@@ -3,26 +3,28 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title FakeoutGame
  * @notice Handles staking and reward distribution for the FAKEOUT social deduction game.
  *         Game logic lives off-chain (backend). This contract is purely a treasury:
- *         it holds stakes, enforces first-game-free logic, takes a protocol fee,
- *         and distributes rewards to winners.
+ *         it holds stakes, takes a protocol fee, and distributes rewards to winners.
  *
- * @dev Deployed on Celo. Uses GoodDollar (G$) as the staking token.
+ * @dev Deployed on Celo via UUPS proxy. Uses GoodDollar (G$) as the staking token.
+ *      Upgrade authority is the contract owner (backend deployer key).
  */
-contract FakeoutGame is Ownable, ReentrancyGuard {
+contract FakeoutGame is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     // ─── State ────────────────────────────────────────────────────────────────
 
-    IERC20 public immutable goodDollar;
+    IERC20 public goodDollar;
     address public treasury;
-    uint256 public protocolFeeBps = 500; // 5% — max 10%
+    uint256 public protocolFeeBps; // 5% default — max 10%
 
     enum GameStatus {
         Open,       // accepting joins
@@ -42,6 +44,11 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     // gameId (bytes32 from backend uuid) → Game
     mapping(bytes32 => Game) private games;
 
+    // Total G$ locked in active/open game pots — used to guard rescueTokens
+    uint256 public totalLockedAmount;
+
+    // Storage gap — reserve slots for future upgrades without layout collision
+    uint256[48] private __gap;
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -73,17 +80,26 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     error TransferFailed();
     error WinnerNotAPlayer();
     error PlayerNotInGame();
+    error InsufficientFreeBalance();
 
-    // ─── Constructor ──────────────────────────────────────────────────────────
+    // ─── Constructor / Initializer ────────────────────────────────────────────
 
-    constructor(
-        address _goodDollar,
-        address _treasury
-    ) Ownable(msg.sender) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _goodDollar, address _treasury) public initializer {
+        __Ownable_init(msg.sender);
         if (_goodDollar == address(0) || _treasury == address(0)) revert ZeroAddress();
         goodDollar = IERC20(_goodDollar);
         treasury = _treasury;
+        protocolFeeBps = 500; // 5%
     }
+
+    // ─── UUPS upgrade authorisation ───────────────────────────────────────────
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // ─── Game Lifecycle ───────────────────────────────────────────────────────
 
@@ -131,6 +147,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
             // Pull stake from player — player must have approved contract first
             goodDollar.safeTransferFrom(player, address(this), game.stakeAmount);
             game.pot += game.stakeAmount;
+            totalLockedAmount += game.stakeAmount;
         }
 
         game.players.push(player);
@@ -183,8 +200,9 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         game.winners = winners;
 
         uint256 pot = game.pot;
+        if (pot > 0) totalLockedAmount -= pot;
 
-        // If pot is 0 (e.g. all players were first-timers), nothing to distribute
+        // If pot is 0 (free game), nothing to distribute
         if (pot == 0) {
             emit GameCompleted(gameId, winners, 0, 0);
             return;
@@ -243,6 +261,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         // Refund stake if they paid
         if (game.stakeAmount > 0) {
             game.pot -= game.stakeAmount;
+            totalLockedAmount -= game.stakeAmount;
             goodDollar.safeTransfer(player, game.stakeAmount);
         }
     }
@@ -261,6 +280,8 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
         game.status = GameStatus.Completed;
 
         if (game.stakeAmount > 0) {
+            uint256 lockedPot = game.pot;
+            if (lockedPot > 0) totalLockedAmount -= lockedPot;
             for (uint256 i = 0; i < game.players.length; i++) {
                 goodDollar.safeTransfer(game.players[i], game.stakeAmount);
             }
@@ -268,7 +289,7 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Update the treasury address
+     * @notice Update the treasury address.
      */
     function setTreasury(address newTreasury) external onlyOwner {
         if (newTreasury == address(0)) revert ZeroAddress();
@@ -278,10 +299,14 @@ contract FakeoutGame is Ownable, ReentrancyGuard {
 
     /**
      * @notice Recover tokens accidentally sent to this contract.
-     * @dev    Owner is responsible for not over-withdrawing from active game pots.
+     *         G$ withdrawals are capped to funds not locked in active game pots.
      */
     function rescueTokens(address token, address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+        if (token == address(goodDollar)) {
+            uint256 available = goodDollar.balanceOf(address(this)) - totalLockedAmount;
+            if (amount > available) revert InsufficientFreeBalance();
+        }
         IERC20(token).safeTransfer(to, amount);
     }
 

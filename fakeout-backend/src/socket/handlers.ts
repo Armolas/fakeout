@@ -644,9 +644,13 @@ function handleVoteComplete(io: Server, roomCode: string) {
     word: game.word,
     winners,
     potAmount: game.potAmount,
-    perWinnerAmount: winners.length > 0
-      ? (BigInt(game.potAmount) / BigInt(winners.length)).toString()
-      : '0',
+    perWinnerAmount: (() => {
+      if (winners.length === 0) return '0'
+      const PROTOCOL_FEE_BPS = 500n
+      const pot = BigInt(game.potAmount)
+      const rewardPool = (pot * (10_000n - PROTOCOL_FEE_BPS)) / 10_000n
+      return (rewardPool / BigInt(winners.length)).toString()
+    })(),
   })
 }
 
